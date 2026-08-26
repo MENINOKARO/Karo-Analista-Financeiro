@@ -25,7 +25,7 @@
 
 O **Karo Analista Financeiro** foi concebido sob os padrões de uma **Mesa de Operações Institucional Global (*Top Tier Desk*)**, combinando:
 1. **Rigor Matemático e Confluência Multinível**: Exige o alinhamento de 7 grandes escolas do trading clássico e moderno antes de disparar uma recomendação.
-2. **Cotações e Cadeias de Opções Reais da B3**: Calibração exata dos strikes oficiais (Série I - Setembro 2026) e prêmios correspondentes aos livros de ofertas reais de corretoras como **Clear, XP, BTG Pactual e Genial**.
+2. **Cotações e Cadeias de Opções Reais da B3**: Calibração exata dos strikes oficiais e prêmios correspondentes aos livros de ofertas reais de corretoras .
 3. **Visão Multicenários da Mesa**: Cada oportunidade possui um mapeamento de 3 cenários (Cenário de Alta com Breakeven, Cenário Lateral com desmonte preventivo e Cenário de Invalidação com Stop técnico rigoroso).
 
 ---
@@ -40,13 +40,9 @@ O **Karo Analista Financeiro** foi concebido sob os padrões de uma **Mesa de Op
   - 📊 **Ações à Vista - Swing Trade** (Lote Padrão de 100 ou Fracionário `F`).
   - ⚡ **Day Trade no 5m** (Alvos rápidos e encerramento intraday).
 
-### 2. 💎 Motor de Opções Reais B3 (Série I - Setembro 2026)
+### 2. 💎 Motor de Opções Reais B3 
 - Identificação precisa de códigos oficiais da B3:
-  - **Petrobras (`PETR4`)**: `PETRI417` (Strike R$ 41,67), `PETRI437` (Strike R$ 43,67), `PETRI452` (Strike R$ 45,17).
-  - **Bradesco (`BBDC4`)**: `BBDCI168` (Strike R$ 16,75 a R$ 0,35), `BBDCI170`, `BBDCI173`.
-  - **Magazine Luiza (`MGLU3`)**: `MGLUI450` (Strike R$ 4,50 a R$ 0,37), `MGLUI480` (Strike R$ 4,80 a R$ 0,13).
-  - **Banco do Brasil (`BBAS3`)**: `BBASI181` (R$ 1,80), `BBASI191` (R$ 1,03).
-  - **Vale (`VALE3`)**: `VALEI780` (Strike R$ 78,00), `VALEI800`.
+ 
 - Simulador financeiro em Reais (R$) para 10, 100, 200, 500 ou 1.000 opções com indicação exata de **Custo Máximo, Lucro Potencial e Risco Limitado**.
 
 ### 3. 🪙 Mercado Cripto 24/7 (Spot & Futuros)
@@ -88,63 +84,6 @@ O **Karo Analista Financeiro** foi concebido sob os padrões de uma **Mesa de Op
 | **Smart Money (SMC / ICT)** | Michael Huddleston | *Fair Value Gaps (FVG)*, Capturas de Liquidez e Blocos de Ordem (*Order Blocks*). |
 | **Larry Williams 9.1/9.2** | Larry Williams | Gatilhos de reversão e continuidade baseados na inclinação da EMA 9. |
 | **Triple Screen System** | Alexander Elder | Análise de 3 tempos gráficos (Diário, 15m e 5m) para filtrar ruído de mercado. |
-
----
-
-## 🚀 Instalação e Execução Local
-
-### Pré-requisitos:
-- [Node.js](https://nodejs.org/) versão 18.x ou superior.
-- NPM ou Yarn.
-
-### Passo a Passo:
-
-1. **Clone o repositório**:
-   ```bash
-   git clone https://github.com/MENINOKARO/Karo-Analista-Financeiro.git
-   cd Karo-Analista-Financeiro
-   ```
-
-2. **Instale as dependências**:
-   ```bash
-   npm install
-   ```
-
-3. **Inicie o servidor de desenvolvimento**:
-   ```bash
-   npm run dev
-   ```
-
-4. **Acesse no seu navegador**:
-   👉 `http://localhost:3000`
-
-*(No Windows, você também pode simplesmente dar um duplo clique em `start-marketmaster.bat`)*.
-
----
-
-## 🌐 Deploy & Hospedagem
-
-### Deploy na Vercel (Recomendado):
-1. Instale a CLI da Vercel (se necessário):
-   ```bash
-   npm i -g vercel
-   ```
-2. Execute o deploy:
-   ```bash
-   npx vercel --prod
-   ```
-
-### Deploy com Docker:
-```bash
-docker-compose up -d --build
-```
-
----
-
-## 📄 Licença
-Distribuído sob a licença MIT. Consulte `LICENSE` para mais detalhes.
-
----
 
 <div align="center">
 Desenvolvido com foco em precisão, transparência e excelência analítica institucional.

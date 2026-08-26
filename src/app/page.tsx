@@ -13,6 +13,7 @@ import { NewsTab } from '@/components/NewsTab';
 import { GoalsPlannerTab } from '@/components/GoalsPlannerTab';
 import { BrokersTab } from '@/components/BrokersTab';
 import { PortfolioTab } from '@/components/PortfolioTab';
+import { DisclaimerModal } from '@/components/DisclaimerModal';
 
 export default function MarketMasterDashboard() {
   const [activeTab, setActiveTab] = useState<'goals' | 'portfolio' | 'radar' | 'news' | 'chart' | 'calculator' | 'brokers' | 'telegram' | 'methodologies'>('goals');
@@ -195,6 +196,7 @@ export default function MarketMasterDashboard() {
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col">
+      <DisclaimerModal />
       <header className="border-b border-slate-800 bg-[#0d1322]/90 backdrop-blur sticky top-0 z-50">
         <Header 
           marketData={marketData} 

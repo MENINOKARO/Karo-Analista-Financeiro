@@ -1,9 +1,9 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MarketMaster AI - Scanner Sênior 5 Minutos & Sinais Institucionais',
-  description: 'Plataforma institucional de análise quantitativa e scanner de mercado financeiro em tempo real para ações B3 e Globais.',
+  title: 'Karo Analista Financeiro - Scanner Sênior 5m & Inteligência de Mercado',
+  description: 'Plataforma institucional de análise quantitativa, scanner de mercado financeiro em tempo real para ações B3, Opções Reais e Criptoativos.',
 };
 
 export default function RootLayout({

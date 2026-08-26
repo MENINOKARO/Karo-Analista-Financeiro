@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import { Zap, TrendingUp, Clock, RefreshCw } from 'lucide-react';
@@ -20,7 +20,7 @@ export function Header({ marketData, scanning, onManualScan }: HeaderProps) {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400">
-              MarketMaster AI
+              Karo Analista Financeiro
             </h1>
             <span className="text-[10px] uppercase font-semibold tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
               Senior Analyst Pro

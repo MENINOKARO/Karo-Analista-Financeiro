@@ -96,127 +96,85 @@ export class OptionsEngine {
     if (direction === 'BUY') {
       const callChain = B3OptionsDatabase.generateOptionChain(ticker, currentPrice, 'CALL', monthOffset);
       
-      // Encontra opções ideais para Compra e Venda
+      // Encontra opções com Strikes Acima do Preço Atual (OTM - Baixo Risco e Baixo Custo em Centavos)
+      // Ex: Ação a R$ 4,54 -> Sugere Strike R$ 4,80 (MGLUI480 / R$ 0,13) ou R$ 5,00 (MGLUI500 / R$ 0,08)
+      // Ex: Ação a R$ 41,35 -> Sugere Strike R$ 43,67 (PETRI437 / R$ 1,42) ou R$ 45,17 (PETRI452 / R$ 0,79)
       const atmContract = callChain.find(c => c.moneyness === 'ATM') || callChain[Math.floor(callChain.length / 2)];
-      const otmContract = callChain.find(c => c.moneyness === 'OTM') || callChain[callChain.length - 2];
-      const leg1 = isLongTerm ? otmContract : atmContract;
-      const leg2 = callChain.find(c => c.strike > leg1.strike * 1.025) || callChain[callChain.length - 1];
+      const otmLowRiskContract = callChain.find(c => c.strike > currentPrice * 1.015 && c.strike <= currentPrice * 1.08) 
+        || callChain.find(c => c.moneyness === 'OTM') 
+        || callChain[callChain.length - 2];
+      const farOtmContract = callChain.find(c => c.strike > otmLowRiskContract.strike * 1.02) || callChain[callChain.length - 1];
 
-      const spreadWidth = Number((leg2.strike - leg1.strike).toFixed(2));
-      const estimatedCost = Number(Math.max(0.15, (leg1.estimatedPremium - leg2.estimatedPremium)).toFixed(2));
-      const maxProfit = Number(Math.max(0.20, (spreadWidth - estimatedCost)).toFixed(2));
-      const profitPercent = Math.round((maxProfit / estimatedCost) * 100);
-      const breakeven = Number((leg1.strike + estimatedCost).toFixed(2));
+      const spreadWidth = Number((farOtmContract.strike - otmLowRiskContract.strike).toFixed(2));
+      const estimatedCost = Number(Math.max(0.05, (otmLowRiskContract.estimatedPremium - farOtmContract.estimatedPremium)).toFixed(2));
+      const maxProfit = Number(Math.max(0.15, (spreadWidth - estimatedCost)).toFixed(2));
+      const profitPercent = Math.round((maxProfit / Math.max(0.05, estimatedCost)) * 100);
+      const breakeven = Number((otmLowRiskContract.strike + otmLowRiskContract.estimatedPremium).toFixed(2));
 
       // GERAÇÃO DAS DIVERSAS MODALIDADES DE OPÇÕES PARA ESCOLHA DO USUÁRIO
-      const availableStrategies: OptionStrategyDetail[] = isLongTerm ? [
+      const availableStrategies: OptionStrategyDetail[] = [
         {
           id: 'COMPRA_CALL_SECO',
-          title: `Compra de Call Longa OTM - Baixo Risco (${otmContract.ticker})`,
-          badge: `🛡️ Baixo Custo (Centavos) & ${expInfo.daysToExpiration} Dias de Prazo`,
-          description: `Compra direta da Call Série ${expInfo.callLetter} (${otmContract.ticker} - Strike R$ ${otmContract.strike.toFixed(2)}). O valor investido é muito baixo (R$ ${otmContract.estimatedPremium.toFixed(2)} por opção), o risco é estritamente limitado a esses centavos e o decaimento de tempo (Theta) é quase nulo no primeiro mês.`,
-          costOrIncomePerUnit: otmContract.estimatedPremium,
+          title: `Compra de Call OTM (${otmLowRiskContract.ticker})`,
+          badge: `🛡️ Strike Acima (R$ ${otmLowRiskContract.strike.toFixed(2)}) • Baixo Custo (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)})`,
+          description: `Compra direta da Call fora do dinheiro (${otmLowRiskContract.ticker} - Strike R$ ${otmLowRiskContract.strike.toFixed(2)}). Como o strike está acima do preço atual (R$ ${currentPrice.toFixed(2)}), o custo da opção é muito baixo (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)} por unidade), gerando risco mínimo de centavos e retorno assimétrico de até +350% no rompimento.`,
+          costOrIncomePerUnit: otmLowRiskContract.estimatedPremium,
           isCredit: false,
-          maxRiskDescription: `Perda máxima 100% LIMITADA ao valor pago (R$ ${otmContract.estimatedPremium.toFixed(2)} por opção = R$ ${(otmContract.estimatedPremium * 100).toFixed(2)} por lote). Sem risco de chamada de margem.`,
-          maxProfitDescription: `Potencial assimétrico de +150% a +400% na continuidade do movimento até ${expInfo.dateString}.`,
-          breakevenPrice: Number((otmContract.strike + otmContract.estimatedPremium).toFixed(2)),
-          executionGuide: `No Home Broker da Clear: Digite ${otmContract.ticker}, selecione COMPRA e envie a ordem no valor de mercado (R$ ${otmContract.estimatedPremium.toFixed(2)}).`,
-          leg1: otmContract
+          maxRiskDescription: `Perda máxima 100% LIMITADA aos centavos investidos (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)} por opção = R$ ${(otmLowRiskContract.estimatedPremium * 100).toFixed(2)} por lote de 100). Sem risco de chamada de margem.`,
+          maxProfitDescription: `Potencial explosivo de +150% a +400% na valorização da ação até o Alvo 1.`,
+          breakevenPrice: breakeven,
+          executionGuide: `No Home Broker da Clear/XP: Digite ${otmLowRiskContract.ticker}, selecione COMPRA e envie a ordem no valor de mercado (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)}).`,
+          leg1: otmLowRiskContract
         },
         {
           id: 'TRAVA_ALTA_CALL',
-          title: `Trava de Alta Longa com Call (${atmContract.ticker} / ${otmContract.ticker})`,
-          badge: '🛡️ Risco Travado & Tempo Amplo a Favor',
-          description: `Compra da Call ${atmContract.ticker} (Strike R$ ${atmContract.strike.toFixed(2)}) e venda da Call ${otmContract.ticker} (Strike R$ ${otmContract.strike.toFixed(2)}). Financiamento do custo e proteção máxima contra volatilidade.`,
-          costOrIncomePerUnit: Number(Math.max(0.20, atmContract.estimatedPremium - otmContract.estimatedPremium).toFixed(2)),
-          isCredit: false,
-          maxRiskDescription: `Risco 100% limitado ao débito pago. Sem chamada de margem.`,
-          maxProfitDescription: `Retorno líquido planejado de +80% a +180% sobre o capital investido.`,
-          breakevenPrice: Number((atmContract.strike + Math.max(0.20, atmContract.estimatedPremium - otmContract.estimatedPremium)).toFixed(2)),
-          executionGuide: `No Home Broker da Clear: Compre ${atmContract.ticker} e venda ${otmContract.ticker} na mesma quantidade.`,
-          leg1: atmContract,
-          leg2: otmContract
-        },
-        {
-          id: 'VENDA_COBERTA_CALL',
-          title: `Venda Coberta Longa de Taxa (${otmContract.ticker})`,
-          badge: '💵 Geração de Renda Passiva Estendida',
-          description: `Para quem possui as ações ${cleanStock} em custódia: venda a Call ${otmContract.ticker} e receba o prêmio integralmente em conta com prazo elástico.`,
-          costOrIncomePerUnit: otmContract.estimatedPremium,
-          isCredit: true,
-          maxRiskDescription: `Risco zero de chamada (as ações em carteira cobrem a operação).`,
-          maxProfitDescription: `Renda imediata no bolso de R$ ${otmContract.estimatedPremium.toFixed(2)} por opção (+${((otmContract.estimatedPremium / currentPrice) * 100).toFixed(1)}% no período).`,
-          breakevenPrice: Number((currentPrice - otmContract.estimatedPremium).toFixed(2)),
-          executionGuide: `No Home Broker da Clear: Digite ${otmContract.ticker}, selecione VENDA e receba o crédito.`,
-          leg1: otmContract
-        }
-      ] : [
-        {
-          id: 'TRAVA_ALTA_CALL',
-          title: `Trava de Alta com Call (${leg1.ticker} / ${leg2.ticker})`,
-          badge: '🛡️ Risco 100% Limitado & Custo Reduzido',
-          description: `Compra da Call ${leg1.ticker} (Strike R$ ${leg1.strike.toFixed(2)}) e venda da Call ${leg2.ticker} (Strike R$ ${leg2.strike.toFixed(2)}). O prêmio recebido da venda financia a compra, reduzindo o custo total.`,
+          title: `Trava de Alta com Call (${otmLowRiskContract.ticker} / ${farOtmContract.ticker})`,
+          badge: `🛡️ Risco Travado em R$ ${estimatedCost.toFixed(2)}/un`,
+          description: `Compra da Call ${otmLowRiskContract.ticker} (Strike R$ ${otmLowRiskContract.strike.toFixed(2)}) e venda da Call ${farOtmContract.ticker} (Strike R$ ${farOtmContract.strike.toFixed(2)}). A ponta vendida reduz o custo da operação e trava o risco.`,
           costOrIncomePerUnit: estimatedCost,
           isCredit: false,
           maxRiskDescription: `Risco 100% LIMITADO ao valor pago (R$ ${estimatedCost.toFixed(2)} por opção = R$ ${(estimatedCost * 100).toFixed(2)} por lote).`,
           maxProfitDescription: `R$ ${maxProfit.toFixed(2)} por opção (+${profitPercent}% de lucro líquido sobre o capital investido).`,
-          breakevenPrice: breakeven,
-          executionGuide: `No Home Broker da Clear: 1º Compre ${leg1.ticker} e 2º Venda ${leg2.ticker} (ou use o módulo Estratégia de Opções).`,
-          leg1,
-          leg2
-        },
-        {
-          id: 'COMPRA_CALL_SECO',
-          title: `Compra a Seco Direcional (${leg1.ticker})`,
-          badge: '🚀 Alavancagem Máxima Direcional',
-          description: `Compra pura da Call ${leg1.ticker} (Strike R$ ${leg1.strike.toFixed(2)}). Lucro ilimitado conforme a ação sobe, sem teto de ganho.`,
-          costOrIncomePerUnit: leg1.estimatedPremium,
-          isCredit: false,
-          maxRiskDescription: `Perda máxima limitada ao prêmio pago (R$ ${leg1.estimatedPremium.toFixed(2)} por opção = R$ ${(leg1.estimatedPremium * 100).toFixed(2)} por lote).`,
-          maxProfitDescription: `Lucro Ilimitado na valorização da ação (+100% a +250% se a ação romper a resistência).`,
-          breakevenPrice: Number((leg1.strike + leg1.estimatedPremium).toFixed(2)),
-          executionGuide: `No Home Broker da Clear: Digite ${leg1.ticker}, selecione COMPRA e envie a ordem no valor de mercado (R$ ${leg1.estimatedPremium.toFixed(2)}).`,
-          leg1
+          breakevenPrice: Number((otmLowRiskContract.strike + estimatedCost).toFixed(2)),
+          executionGuide: `No Home Broker da Clear: 1º Compre ${otmLowRiskContract.ticker} e 2º Venda ${farOtmContract.ticker} (ou use o módulo de Estratégias).`,
+          leg1: otmLowRiskContract,
+          leg2: farOtmContract
         },
         {
           id: 'VENDA_COBERTA_CALL',
-          title: `Venda Coberta de Taxa (${leg2.ticker})`,
-          badge: '💵 Geração de Renda Mensal (Para quem tem a Ação)',
-          description: `Se você já possui as ações ${cleanStock} em carteira, vende a Call ${leg2.ticker} (Strike R$ ${leg2.strike.toFixed(2)}) e embolsa o prêmio imediatamente como renda passiva.`,
-          costOrIncomePerUnit: leg2.estimatedPremium,
+          title: `Venda Coberta OTM (${farOtmContract.ticker})`,
+          badge: '💵 Geração de Renda Acima do Preço (Custódia)',
+          description: `Se você já possui as ações ${cleanStock} em carteira, vende a Call ${farOtmContract.ticker} (Strike R$ ${farOtmContract.strike.toFixed(2)}) bem acima do preço atual e embolsa o prêmio imediatamente como renda passiva sem risco de perder as ações precocemente.`,
+          costOrIncomePerUnit: farOtmContract.estimatedPremium,
           isCredit: true,
-          maxRiskDescription: `Risco zero de chamada extra (as ações já em carteira cobrem a operação).`,
-          maxProfitDescription: `Renda imediata no bolso de R$ ${leg2.estimatedPremium.toFixed(2)} por opção (+${((leg2.estimatedPremium / currentPrice) * 100).toFixed(1)}% de rentabilidade no mês).`,
-          breakevenPrice: Number((currentPrice - leg2.estimatedPremium).toFixed(2)),
-          executionGuide: `No Home Broker da Clear: Digite ${leg2.ticker}, selecione VENDA e receba o crédito em conta.`,
-          leg1: leg2
+          maxRiskDescription: `Risco zero de chamada (as ações em custódia cobrem 100% da operação).`,
+          maxProfitDescription: `Renda imediata no bolso de R$ ${farOtmContract.estimatedPremium.toFixed(2)} por opção (+${((farOtmContract.estimatedPremium / currentPrice) * 100).toFixed(1)}% de rentabilidade).`,
+          breakevenPrice: Number((currentPrice - farOtmContract.estimatedPremium).toFixed(2)),
+          executionGuide: `No Home Broker da Clear: Digite ${farOtmContract.ticker}, selecione VENDA e receba o crédito em conta.`,
+          leg1: farOtmContract
         }
       ];
 
       return {
-        structureType: isLongTerm ? 'COMPRA_CALL_SECO' : 'TRAVA_ALTA_CALL',
-        structureName: isLongTerm ? `Opções Longas de Baixo Risco - Série ${expInfo.callLetter} (${expInfo.dateString})` : `Trava de Alta com Call (${leg1.ticker} / ${leg2.ticker})`,
-        suggestedTicker: isLongTerm ? `${otmContract.ticker} (Compra de Baixo Custo)` : `${leg1.ticker} (Compra) + ${leg2.ticker} (Venda)`,
-        strike1: leg1.strike,
-        strike2: leg2.strike,
+        structureType: 'COMPRA_CALL_SECO',
+        structureName: `Compra de Call OTM (${otmLowRiskContract.ticker}) - Strike R$ ${otmLowRiskContract.strike.toFixed(2)}`,
+        suggestedTicker: `${otmLowRiskContract.ticker} (Strike R$ ${otmLowRiskContract.strike.toFixed(2)} • R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)}/un)`,
+        strike1: otmLowRiskContract.strike,
+        strike2: farOtmContract.strike,
         expirationMonth: `Série ${expInfo.callLetter} (${expInfo.dateString})`,
         expirationDateExact: expInfo.dateString,
         daysToExpiration: expInfo.daysToExpiration,
         timeRiskLevel: expInfo.timeRiskLevel,
         timeRiskDescription: expInfo.timeRiskDescription,
         timeStopRule: expInfo.timeStopRule,
-        estimatedCostPerUnit: isLongTerm ? otmContract.estimatedPremium : estimatedCost,
-        maxRiskDescription: isLongTerm ? `Risco 100% LIMITADO aos centavos pagos (R$ ${otmContract.estimatedPremium.toFixed(2)} por opção).` : `Risco 100% TRAVADO e LIMITADO ao prêmio investido (R$ ${estimatedCost.toFixed(2)} por opção). Sem chamada de margem.`,
-        maxProfitDescription: isLongTerm ? `Retorno assimétrico de +150% a +400% no prazo estendido.` : `R$ ${maxProfit.toFixed(2)} por opção (+${profitPercent}% de retorno sobre o capital alocado).`,
+        estimatedCostPerUnit: otmLowRiskContract.estimatedPremium,
+        maxRiskDescription: `Risco 100% LIMITADO aos centavos pagos (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)} por opção = R$ ${(otmLowRiskContract.estimatedPremium * 100).toFixed(2)} por lote).`,
+        maxProfitDescription: `Retorno assimétrico de +150% a +400% na aceleração até o Alvo 1.`,
         breakevenPrice: breakeven,
-        riskAnalysis: isLongTerm 
-          ? `Excelente oportunidade de baixo risco: ao comprar a Call Série ${expInfo.callLetter} com ${expInfo.daysToExpiration} dias de prazo, o investidor protege seu capital contra a perda de tempo rápida (Theta), pagando apenas centavos e mantendo o potencial de valorização explosiva.`
-          : `Excelente estrutura institucional calculada para a janela de ${expInfo.daysToExpiration} dias. Ao comprar a Call ${leg1.ticker} (Strike R$ ${leg1.strike.toFixed(2)}) e vender a Call ${leg2.ticker} (Strike R$ ${leg2.strike.toFixed(2)}), você anula o efeito negativo da passagem do tempo (Theta) e reduz o custo da operação.`,
-        executionSteps: isLongTerm 
-          ? `No Home Broker da Clear/XP: Selecione ${cleanStock}, vá no vencimento ${expInfo.dateString} e compre a opção ${otmContract.ticker}.`
-          : `No Home Broker da Clear/XP: Selecione a ação ${cleanStock}, vá em Opções e monte a trava comprando ${leg1.ticker} e vendendo ${leg2.ticker}.`,
-        leg1,
-        leg2,
+        riskAnalysis: `Excelente estrutura de baixo risco: ao comprar a Call ${otmLowRiskContract.ticker} com Strike R$ ${otmLowRiskContract.strike.toFixed(2)} (posicionado acima do preço atual de R$ ${currentPrice.toFixed(2)}), você investe apenas centavos (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)}), travando a perda máxima num valor irrisório e preservando um potencial de ganho exponencial de até +350%.`,
+        executionSteps: `No Home Broker da Clear/XP: Digite ${otmLowRiskContract.ticker}, selecione COMPRA e envie a ordem no valor de mercado (R$ ${otmLowRiskContract.estimatedPremium.toFixed(2)}).`,
+        leg1: otmLowRiskContract,
+        leg2: farOtmContract,
         availableStrikesChain: callChain,
         availableStrategies
       };

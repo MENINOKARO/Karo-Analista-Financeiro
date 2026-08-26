@@ -8,8 +8,24 @@ export class OptionsEngine {
     direction: ActionDirection
   ): OptionsTradePlan {
     const isCrypto = ticker.includes('USD') || ticker.includes('-') || (!ticker.endsWith('.SA') && (ticker.includes('BTC') || ticker.includes('ETH') || ticker.includes('SOL') || ticker.includes('BNB')));
+    
+    const shortTermPlan = this.generateOptionsPlanForOffset(ticker, currentPrice, direction, 0);
+    if (!isCrypto) {
+      shortTermPlan.longTermPlan = this.generateOptionsPlanForOffset(ticker, currentPrice, direction, 1);
+    }
+    return shortTermPlan;
+  }
+
+  public static generateOptionsPlanForOffset(
+    ticker: string,
+    currentPrice: number,
+    direction: ActionDirection,
+    monthOffset: number = 0
+  ): OptionsTradePlan {
+    const isCrypto = ticker.includes('USD') || ticker.includes('-') || (!ticker.endsWith('.SA') && (ticker.includes('BTC') || ticker.includes('ETH') || ticker.includes('SOL') || ticker.includes('BNB')));
     const cleanStock = ticker.replace('.SA', '');
-    const expInfo = B3OptionsDatabase.getB3ExpirationDate(0);
+    const expInfo = B3OptionsDatabase.getB3ExpirationDate(monthOffset);
+    const isLongTerm = monthOffset >= 1;
 
     // SE FOR CRIPTOATIVO (NÃO EXISTE OPÇÕES NA B3)
     if (isCrypto) {
@@ -78,11 +94,13 @@ export class OptionsEngine {
 
     // AÇÕES DA B3 (MERCADO OFICIAL DE OPÇÕES)
     if (direction === 'BUY') {
-      const callChain = B3OptionsDatabase.generateOptionChain(ticker, currentPrice, 'CALL');
+      const callChain = B3OptionsDatabase.generateOptionChain(ticker, currentPrice, 'CALL', monthOffset);
       
       // Encontra opções ideais para Compra e Venda
-      const leg1 = callChain.find(c => c.moneyness === 'ATM') || callChain[Math.floor(callChain.length / 2)];
-      const leg2 = callChain.find(c => c.strike > leg1.strike * 1.025) || callChain[callChain.length - 2];
+      const atmContract = callChain.find(c => c.moneyness === 'ATM') || callChain[Math.floor(callChain.length / 2)];
+      const otmContract = callChain.find(c => c.moneyness === 'OTM') || callChain[callChain.length - 2];
+      const leg1 = isLongTerm ? otmContract : atmContract;
+      const leg2 = callChain.find(c => c.strike > leg1.strike * 1.025) || callChain[callChain.length - 1];
 
       const spreadWidth = Number((leg2.strike - leg1.strike).toFixed(2));
       const estimatedCost = Number(Math.max(0.15, (leg1.estimatedPremium - leg2.estimatedPremium)).toFixed(2));
@@ -91,7 +109,48 @@ export class OptionsEngine {
       const breakeven = Number((leg1.strike + estimatedCost).toFixed(2));
 
       // GERAÇÃO DAS DIVERSAS MODALIDADES DE OPÇÕES PARA ESCOLHA DO USUÁRIO
-      const availableStrategies: OptionStrategyDetail[] = [
+      const availableStrategies: OptionStrategyDetail[] = isLongTerm ? [
+        {
+          id: 'COMPRA_CALL_SECO',
+          title: `Compra de Call Longa OTM - Baixo Risco (${otmContract.ticker})`,
+          badge: `🛡️ Baixo Custo (Centavos) & ${expInfo.daysToExpiration} Dias de Prazo`,
+          description: `Compra direta da Call Série ${expInfo.callLetter} (${otmContract.ticker} - Strike R$ ${otmContract.strike.toFixed(2)}). O valor investido é muito baixo (R$ ${otmContract.estimatedPremium.toFixed(2)} por opção), o risco é estritamente limitado a esses centavos e o decaimento de tempo (Theta) é quase nulo no primeiro mês.`,
+          costOrIncomePerUnit: otmContract.estimatedPremium,
+          isCredit: false,
+          maxRiskDescription: `Perda máxima 100% LIMITADA ao valor pago (R$ ${otmContract.estimatedPremium.toFixed(2)} por opção = R$ ${(otmContract.estimatedPremium * 100).toFixed(2)} por lote). Sem risco de chamada de margem.`,
+          maxProfitDescription: `Potencial assimétrico de +150% a +400% na continuidade do movimento até ${expInfo.dateString}.`,
+          breakevenPrice: Number((otmContract.strike + otmContract.estimatedPremium).toFixed(2)),
+          executionGuide: `No Home Broker da Clear: Digite ${otmContract.ticker}, selecione COMPRA e envie a ordem no valor de mercado (R$ ${otmContract.estimatedPremium.toFixed(2)}).`,
+          leg1: otmContract
+        },
+        {
+          id: 'TRAVA_ALTA_CALL',
+          title: `Trava de Alta Longa com Call (${atmContract.ticker} / ${otmContract.ticker})`,
+          badge: '🛡️ Risco Travado & Tempo Amplo a Favor',
+          description: `Compra da Call ${atmContract.ticker} (Strike R$ ${atmContract.strike.toFixed(2)}) e venda da Call ${otmContract.ticker} (Strike R$ ${otmContract.strike.toFixed(2)}). Financiamento do custo e proteção máxima contra volatilidade.`,
+          costOrIncomePerUnit: Number(Math.max(0.20, atmContract.estimatedPremium - otmContract.estimatedPremium).toFixed(2)),
+          isCredit: false,
+          maxRiskDescription: `Risco 100% limitado ao débito pago. Sem chamada de margem.`,
+          maxProfitDescription: `Retorno líquido planejado de +80% a +180% sobre o capital investido.`,
+          breakevenPrice: Number((atmContract.strike + Math.max(0.20, atmContract.estimatedPremium - otmContract.estimatedPremium)).toFixed(2)),
+          executionGuide: `No Home Broker da Clear: Compre ${atmContract.ticker} e venda ${otmContract.ticker} na mesma quantidade.`,
+          leg1: atmContract,
+          leg2: otmContract
+        },
+        {
+          id: 'VENDA_COBERTA_CALL',
+          title: `Venda Coberta Longa de Taxa (${otmContract.ticker})`,
+          badge: '💵 Geração de Renda Passiva Estendida',
+          description: `Para quem possui as ações ${cleanStock} em custódia: venda a Call ${otmContract.ticker} e receba o prêmio integralmente em conta com prazo elástico.`,
+          costOrIncomePerUnit: otmContract.estimatedPremium,
+          isCredit: true,
+          maxRiskDescription: `Risco zero de chamada (as ações em carteira cobrem a operação).`,
+          maxProfitDescription: `Renda imediata no bolso de R$ ${otmContract.estimatedPremium.toFixed(2)} por opção (+${((otmContract.estimatedPremium / currentPrice) * 100).toFixed(1)}% no período).`,
+          breakevenPrice: Number((currentPrice - otmContract.estimatedPremium).toFixed(2)),
+          executionGuide: `No Home Broker da Clear: Digite ${otmContract.ticker}, selecione VENDA e receba o crédito.`,
+          leg1: otmContract
+        }
+      ] : [
         {
           id: 'TRAVA_ALTA_CALL',
           title: `Trava de Alta com Call (${leg1.ticker} / ${leg2.ticker})`,
@@ -135,9 +194,9 @@ export class OptionsEngine {
       ];
 
       return {
-        structureType: 'TRAVA_ALTA_CALL',
-        structureName: `Trava de Alta com Call (${leg1.ticker} / ${leg2.ticker})`,
-        suggestedTicker: `${leg1.ticker} (Compra) + ${leg2.ticker} (Venda)`,
+        structureType: isLongTerm ? 'COMPRA_CALL_SECO' : 'TRAVA_ALTA_CALL',
+        structureName: isLongTerm ? `Opções Longas de Baixo Risco - Série ${expInfo.callLetter} (${expInfo.dateString})` : `Trava de Alta com Call (${leg1.ticker} / ${leg2.ticker})`,
+        suggestedTicker: isLongTerm ? `${otmContract.ticker} (Compra de Baixo Custo)` : `${leg1.ticker} (Compra) + ${leg2.ticker} (Venda)`,
         strike1: leg1.strike,
         strike2: leg2.strike,
         expirationMonth: `Série ${expInfo.callLetter} (${expInfo.dateString})`,
@@ -146,19 +205,23 @@ export class OptionsEngine {
         timeRiskLevel: expInfo.timeRiskLevel,
         timeRiskDescription: expInfo.timeRiskDescription,
         timeStopRule: expInfo.timeStopRule,
-        estimatedCostPerUnit: estimatedCost,
-        maxRiskDescription: `Risco 100% TRAVADO e LIMITADO ao prêmio investido (R$ ${estimatedCost.toFixed(2)} por opção). Sem chamada de margem.`,
-        maxProfitDescription: `R$ ${maxProfit.toFixed(2)} por opção (+${profitPercent}% de retorno sobre o capital alocado).`,
+        estimatedCostPerUnit: isLongTerm ? otmContract.estimatedPremium : estimatedCost,
+        maxRiskDescription: isLongTerm ? `Risco 100% LIMITADO aos centavos pagos (R$ ${otmContract.estimatedPremium.toFixed(2)} por opção).` : `Risco 100% TRAVADO e LIMITADO ao prêmio investido (R$ ${estimatedCost.toFixed(2)} por opção). Sem chamada de margem.`,
+        maxProfitDescription: isLongTerm ? `Retorno assimétrico de +150% a +400% no prazo estendido.` : `R$ ${maxProfit.toFixed(2)} por opção (+${profitPercent}% de retorno sobre o capital alocado).`,
         breakevenPrice: breakeven,
-        riskAnalysis: `Excelente estrutura institucional calculada para a janela de ${expInfo.daysToExpiration} dias. Ao comprar a Call ${leg1.ticker} (Strike R$ ${leg1.strike.toFixed(2)}) e vender a Call ${leg2.ticker} (Strike R$ ${leg2.strike.toFixed(2)}), você anula o efeito negativo da passagem do tempo (Theta) e reduz o custo da operação.`,
-        executionSteps: `No Home Broker da Clear/XP: Selecione a ação ${cleanStock}, vá em Opções e monte a trava comprando ${leg1.ticker} e vendendo ${leg2.ticker}.`,
+        riskAnalysis: isLongTerm 
+          ? `Excelente oportunidade de baixo risco: ao comprar a Call Série ${expInfo.callLetter} com ${expInfo.daysToExpiration} dias de prazo, o investidor protege seu capital contra a perda de tempo rápida (Theta), pagando apenas centavos e mantendo o potencial de valorização explosiva.`
+          : `Excelente estrutura institucional calculada para a janela de ${expInfo.daysToExpiration} dias. Ao comprar a Call ${leg1.ticker} (Strike R$ ${leg1.strike.toFixed(2)}) e vender a Call ${leg2.ticker} (Strike R$ ${leg2.strike.toFixed(2)}), você anula o efeito negativo da passagem do tempo (Theta) e reduz o custo da operação.`,
+        executionSteps: isLongTerm 
+          ? `No Home Broker da Clear/XP: Selecione ${cleanStock}, vá no vencimento ${expInfo.dateString} e compre a opção ${otmContract.ticker}.`
+          : `No Home Broker da Clear/XP: Selecione a ação ${cleanStock}, vá em Opções e monte a trava comprando ${leg1.ticker} e vendendo ${leg2.ticker}.`,
         leg1,
         leg2,
         availableStrikesChain: callChain,
         availableStrategies
       };
     } else {
-      const putChain = B3OptionsDatabase.generateOptionChain(ticker, currentPrice, 'PUT');
+      const putChain = B3OptionsDatabase.generateOptionChain(ticker, currentPrice, 'PUT', monthOffset);
       
       const leg1 = putChain.find(c => c.moneyness === 'ATM') || putChain[Math.floor(putChain.length / 2)];
       const leg2 = putChain.find(c => c.strike < leg1.strike * 0.97) || putChain[0];

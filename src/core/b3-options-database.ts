@@ -26,27 +26,29 @@ export class B3OptionsDatabase {
     const findThirdFriday = (y: number, m: number): Date => {
       let count = 0;
       for (let day = 1; day <= 31; day++) {
-        const d = new Date(y, m, day);
-        if (d.getMonth() !== m) break;
+        const d = new Date(y, m % 12, day);
+        if (d.getMonth() !== (m % 12)) break;
         if (d.getDay() === 5) {
           count++;
           if (count === 3) return d;
         }
       }
-      return new Date(y, m, 15);
+      return new Date(y, m % 12, 15);
     };
 
-    let targetDate = findThirdFriday(currentYear, currentMonth + targetMonthOffset);
+    let baseTargetDate = findThirdFriday(currentYear, currentMonth);
     let isNextMonthRolled = false;
 
     // Se o vencimento do mês corrente já passou ou restam menos de 5 dias corridos:
     // Avança automaticamente para o próximo mês ativo (Ex: Setembro - Série I)
-    if (targetDate.getTime() <= now.getTime() || (targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) <= 5) {
+    if (baseTargetDate.getTime() <= now.getTime() || (baseTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) <= 5) {
       isNextMonthRolled = true;
       currentMonth = (currentMonth + 1) % 12;
-      const targetYear = currentMonth === 0 ? currentYear + 1 : currentYear;
-      targetDate = findThirdFriday(targetYear, currentMonth);
     }
+
+    const calculatedMonth = (currentMonth + targetMonthOffset) % 12;
+    const calculatedYear = (currentMonth + targetMonthOffset) >= 12 ? currentYear + 1 : currentYear;
+    const targetDate = findThirdFriday(calculatedYear, calculatedMonth);
 
     const diffMs = targetDate.getTime() - now.getTime();
     const daysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
@@ -59,25 +61,25 @@ export class B3OptionsDatabase {
     let timeRiskDescription = '';
     let timeStopRule = '';
 
-    if (isNextMonthRolled && daysRemaining >= 20) {
+    if (targetMonthOffset >= 1) {
       timeRiskLevel = 'SERIE_SEGUINTE_PROTEGIDA';
-      timeRiskDescription = `🛡️ Série Mensal Padrão ${this.CALL_SERIES[currentMonth]} (Vencimento ${dateString}): ${daysRemaining} dias de prazo. Máxima liquidez da B3 e proteção contra decaimento de tempo (Theta).`;
+      timeRiskDescription = `🛡️ Vencimento Estendido Série ${this.CALL_SERIES[calculatedMonth]} (${dateString}): ${daysRemaining} dias de prazo. Baixo risco com decaimento de tempo (Theta) quase NULO no primeiro mês.`;
+      timeStopRule = `Tempo amplo a favor do investidor. Mantenha o trade com tranquilidade até 10 dias úteis antes de ${dateString}.`;
+    } else if (daysRemaining >= 20) {
+      timeRiskLevel = 'SERIE_SEGUINTE_PROTEGIDA';
+      timeRiskDescription = `🛡️ Série Mensal Padrão ${this.CALL_SERIES[calculatedMonth]} (Vencimento ${dateString}): ${daysRemaining} dias de prazo. Máxima liquidez da B3.`;
       timeStopRule = `Encerre ou desmonte a trava se a ação não atingir o Alvo 1 até 5 dias úteis antes de ${dateString}.`;
-    } else if (daysRemaining >= 10 && daysRemaining < 20) {
-      timeRiskLevel = 'RISCO_BAIXO_JANELA_IDEAL';
-      timeRiskDescription = `🟢 Janela Ideal de Retorno: ${daysRemaining} dias úteis até ${dateString}. Excelente relação prêmio/tempo.`;
-      timeStopRule = `Mantenha a posição. Se o ativo não andar até 4 dias antes do vencimento, encerre para resgatar o valor residual.`;
     } else {
-      timeRiskLevel = 'RISCO_MODERADO';
-      timeRiskDescription = `🟡 Janela Curta (${daysRemaining} dias restantes): Acompanhamento diário obrigatório.`;
-      timeStopRule = `Realize lucros no primeiro teste de resistência ou saída no Alvo 1.`;
+      timeRiskLevel = 'RISCO_BAIXO_JANELA_IDEAL';
+      timeRiskDescription = `🟢 Janela Ativa: ${daysRemaining} dias úteis até ${dateString}.`;
+      timeStopRule = `Acompanhe os alvos do trade diariamente.`;
     }
 
     return {
       dateString,
-      monthIndex: currentMonth,
-      callLetter: this.CALL_SERIES[currentMonth] || 'I',
-      putLetter: this.PUT_SERIES[currentMonth] || 'U',
+      monthIndex: calculatedMonth,
+      callLetter: this.CALL_SERIES[calculatedMonth] || 'I',
+      putLetter: this.PUT_SERIES[calculatedMonth] || 'U',
       daysToExpiration: daysRemaining,
       timeRiskLevel,
       timeRiskDescription,
@@ -116,15 +118,24 @@ export class B3OptionsDatabase {
   public static generateOptionChain(
     underlyingStock: string,
     currentPrice: number,
-    optionType: 'CALL' | 'PUT' = 'CALL'
+    optionType: 'CALL' | 'PUT' = 'CALL',
+    targetMonthOffset: number = 0
   ): B3OptionContract[] {
     const clean = underlyingStock.replace('.SA', '').slice(0, 4);
-    const expInfo = this.getB3ExpirationDate(0);
+    const expInfo = this.getB3ExpirationDate(targetMonthOffset);
     const seriesLetter = optionType === 'CALL' ? expInfo.callLetter : expInfo.putLetter;
+    const isLongTerm = targetMonthOffset >= 1;
 
     // 1. BRADESCO (BBDC4) - Calibração Exata do Book da Clear
     if (clean === 'BBDC') {
-      const bbdcStrikes = [
+      const bbdcStrikes = isLongTerm ? [
+        { strike: 16.50, code: `BBDC${seriesLetter}165`, callPremium: 0.78, putPremium: 0.30 },
+        { strike: 16.75, code: `BBDC${seriesLetter}168`, callPremium: 0.58, putPremium: 0.45 },
+        { strike: 17.00, code: `BBDC${seriesLetter}170`, callPremium: 0.42, putPremium: 0.65 },
+        { strike: 17.25, code: `BBDC${seriesLetter}173`, callPremium: 0.32, putPremium: 0.85 }, // Baixo Custo OTM
+        { strike: 17.50, code: `BBDC${seriesLetter}175`, callPremium: 0.22, putPremium: 1.10 },
+        { strike: 18.00, code: `BBDC${seriesLetter}180`, callPremium: 0.12, putPremium: 1.50 }
+      ] : [
         { strike: 15.75, code: `BBDC${seriesLetter}158`, callPremium: 1.05, putPremium: 0.03 },
         { strike: 16.25, code: `BBDC${seriesLetter}163`, callPremium: 0.72, putPremium: 0.08 },
         { strike: 16.50, code: `BBDC${seriesLetter}165`, callPremium: 0.52, putPremium: 0.15 },
@@ -160,7 +171,12 @@ export class B3OptionsDatabase {
 
     // 2. BANCO DO BRASIL (BBAS3) - Calibração Exata do Book da Clear
     if (clean === 'BBAS') {
-      const bbasStrikes = [
+      const bbasStrikes = isLongTerm ? [
+        { strike: 18.10, code: `BBAS${seriesLetter}181`, callPremium: 2.20, putPremium: 0.55 },
+        { strike: 19.10, code: `BBAS${seriesLetter}191`, callPremium: 1.45, putPremium: 1.10 },
+        { strike: 20.10, code: `BBAS${seriesLetter}201`, callPremium: 0.85, putPremium: 1.85 }, // Baixo Risco
+        { strike: 21.10, code: `BBAS${seriesLetter}211`, callPremium: 0.45, putPremium: 2.70 }
+      ] : [
         { strike: 17.10, code: `BBAS${seriesLetter}171`, callPremium: 2.75, putPremium: 0.08 },
         { strike: 18.10, code: `BBAS${seriesLetter}181`, callPremium: 1.80, putPremium: 0.22 }, // Exato da Clear: R$ 1,80
         { strike: 19.10, code: `BBAS${seriesLetter}191`, callPremium: 1.03, putPremium: 0.65 }, // Exato da Clear: R$ 1,03
@@ -194,7 +210,14 @@ export class B3OptionsDatabase {
 
     // 3. PETROBRAS (PETR4) - Calibração Exata do Book da Clear
     if (clean === 'PETR') {
-      const petroStrikes = [
+      const petroStrikes = isLongTerm ? [
+        { strike: 41.67, code: `PETR${seriesLetter}417`, callPremium: 2.95, putPremium: 0.85 },
+        { strike: 42.67, code: `PETR${seriesLetter}427`, callPremium: 2.25, putPremium: 1.35 },
+        { strike: 43.67, code: `PETR${seriesLetter}437`, callPremium: 1.75, putPremium: 2.05 },
+        { strike: 44.67, code: `PETR${seriesLetter}447`, callPremium: 1.25, putPremium: 2.80 },
+        { strike: 45.67, code: `PETR${seriesLetter}457`, callPremium: 0.85, putPremium: 3.50 }, // Baixo Risco OTM
+        { strike: 47.00, code: `PETR${seriesLetter}470`, callPremium: 0.48, putPremium: 4.80 }
+      ] : [
         { strike: 40.92, code: `PETR${seriesLetter}409`, callPremium: 2.95, putPremium: 0.16 },
         { strike: 41.17, code: `PETR${seriesLetter}412`, callPremium: 2.72, putPremium: 0.21 },
         { strike: 41.42, code: `PETR${seriesLetter}414`, callPremium: 2.50, putPremium: 0.30 },
@@ -235,7 +258,12 @@ export class B3OptionsDatabase {
 
     // 4. MAGAZINE LUIZA (MGLU3) - Calibração Exata do Book da Clear
     if (clean === 'MGLU') {
-      const mgluStrikes = [
+      const mgluStrikes = isLongTerm ? [
+        { strike: 4.50, code: `MGLU${seriesLetter}450`, callPremium: 0.48, putPremium: 0.35 },
+        { strike: 4.80, code: `MGLU${seriesLetter}480`, callPremium: 0.28, putPremium: 0.55 },
+        { strike: 5.00, code: `MGLU${seriesLetter}500`, callPremium: 0.18, putPremium: 0.75 }, // Centavos Baixo Risco
+        { strike: 5.50, code: `MGLU${seriesLetter}550`, callPremium: 0.08, putPremium: 1.20 }
+      ] : [
         { strike: 4.00, code: `MGLU${seriesLetter}400`, callPremium: 0.72, putPremium: 0.05 },
         { strike: 4.20, code: `MGLU${seriesLetter}420`, callPremium: 0.55, putPremium: 0.09 },
         { strike: 4.50, code: `MGLU${seriesLetter}450`, callPremium: 0.37, putPremium: 0.18 }, // Exato da Clear: R$ 0,37
@@ -269,7 +297,12 @@ export class B3OptionsDatabase {
 
     // 5. VALE (VALE3) - Calibração Exata do Book da Clear
     if (clean === 'VALE') {
-      const valeStrikes = [
+      const valeStrikes = isLongTerm ? [
+        { strike: 77.00, code: `VALE${seriesLetter}770`, callPremium: 4.20, putPremium: 2.10 },
+        { strike: 78.00, code: `VALE${seriesLetter}780`, callPremium: 3.50, putPremium: 2.60 },
+        { strike: 80.00, code: `VALE${seriesLetter}800`, callPremium: 2.35, putPremium: 3.65 },
+        { strike: 82.00, code: `VALE${seriesLetter}820`, callPremium: 1.45, putPremium: 4.90 } // Baixo Custo Longo
+      ] : [
         { strike: 75.00, code: `VALE${seriesLetter}750`, callPremium: 4.80, putPremium: 0.80 },
         { strike: 77.00, code: `VALE${seriesLetter}770`, callPremium: 3.30, putPremium: 1.30 },
         { strike: 78.00, code: `VALE${seriesLetter}780`, callPremium: 2.65, putPremium: 1.65 },

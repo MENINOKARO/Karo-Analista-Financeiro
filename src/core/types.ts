@@ -209,6 +209,7 @@ export interface OptionsTradePlan {
   leg2?: B3OptionContract;
   availableStrikesChain?: B3OptionContract[];
   availableStrategies?: OptionStrategyDetail[];
+  longTermPlan?: OptionsTradePlan;
 }
 
 // ANÁLISE INSTITUCIONAL MULTICENÁRIOS (TOP TIER DESK)

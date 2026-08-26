@@ -21,10 +21,11 @@ export function OpportunityCard({ op, onOpenChart, onOpenCalculator, onFollowSig
   const [copiedTicker, setCopiedTicker] = useState<string | null>(null);
   const [showOptionsGrid, setShowOptionsGrid] = useState<boolean>(false);
   const [showScenarios, setShowScenarios] = useState<boolean>(false);
+  const [optionsHorizon, setOptionsHorizon] = useState<'SHORT' | 'LONG'>('SHORT');
 
   const sw = op.swingTrade;
   const dt = op.dayTrade;
-  const opt = op.optionsTrade;
+  const opt = (optionsHorizon === 'LONG' && op.optionsTrade.longTermPlan) ? op.optionsTrade.longTermPlan : op.optionsTrade;
   const sc = op.institutionalScenarios;
   const isCrypto = op.market === 'CRYPTO' || (!op.ticker.endsWith('.SA') && (op.ticker.includes('BTC') || op.ticker.includes('ETH') || op.ticker.includes('SOL')));
 
@@ -230,6 +231,32 @@ export function OpportunityCard({ op, onOpenChart, onOpenCalculator, onFollowSig
           <div className="space-y-3 mb-4">
             <div className="bg-purple-950/30 border border-purple-500/30 p-4 rounded-xl text-xs space-y-3">
               
+              {/* SELETOR DE HORIZONTE DE VENCIMENTO (CURTO X LONGO BAIXO RISCO) */}
+              {!isCrypto && op.optionsTrade.longTermPlan && (
+                <div className="bg-[#0b0f19] p-1 rounded-xl border border-purple-500/30 flex items-center gap-1 text-[11px] font-bold">
+                  <button
+                    onClick={() => { setOptionsHorizon('SHORT'); setSelectedOptionMode('TRAVA_ALTA_CALL'); }}
+                    className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 ${
+                      optionsHorizon === 'SHORT'
+                        ? 'bg-purple-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    ⚡ Série Setembro ({op.optionsTrade.daysToExpiration} dias)
+                  </button>
+                  <button
+                    onClick={() => { setOptionsHorizon('LONG'); setSelectedOptionMode('COMPRA_CALL_SECO'); }}
+                    className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 ${
+                      optionsHorizon === 'LONG'
+                        ? 'bg-emerald-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🛡️ Série Longa Outubro - Baixo Risco ({op.optionsTrade.longTermPlan.daysToExpiration} dias)
+                  </button>
+                </div>
+              )}
+
               {/* SUB-MENU DE ESCOLHA DAS MODALIDADES DE OPÇÕES */}
               {opt.availableStrategies && opt.availableStrategies.length > 0 && (
                 <div className="space-y-1.5">

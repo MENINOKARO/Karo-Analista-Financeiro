@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Zap, LineChart, DollarSign, Smartphone, Award, Newspaper, Target, BookOpen, Briefcase } from 'lucide-react';
+import { Zap, LineChart, DollarSign, Smartphone, Award, Newspaper, Target, BookOpen, Briefcase, Lock, Sparkles, ShieldCheck } from 'lucide-react';
 import { SeniorAnalysisResult, MarketOverview, TelegramConfig, PortfolioSummary } from '@/core/types';
 import { Header } from '@/components/Header';
 import { RadarTab } from '@/components/RadarTab';
@@ -15,6 +15,7 @@ import { BrokersTab } from '@/components/BrokersTab';
 import { PortfolioTab } from '@/components/PortfolioTab';
 import { DisclaimerModal } from '@/components/DisclaimerModal';
 import { AuthModal } from '@/components/AuthModal';
+import { UserProfileModal } from '@/components/UserProfileModal';
 
 export default function MarketMasterDashboard() {
   const [activeTab, setActiveTab] = useState<'goals' | 'portfolio' | 'radar' | 'news' | 'chart' | 'calculator' | 'brokers' | 'telegram' | 'methodologies'>('goals');
@@ -23,8 +24,12 @@ export default function MarketMasterDashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   const [scanning, setScanning] = useState<boolean>(false);
   const [filterAction, setFilterAction] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
+  
+  // Autenticação & Perfil de Usuário
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isAuthChecked, setIsAuthChecked] = useState<boolean>(false);
   
   // Gráficos
   const [chartSymbol, setChartSymbol] = useState<string>('PETR4.SA');
@@ -60,11 +65,12 @@ export default function MarketMasterDashboard() {
           setCurrentUser(u);
           fetchPortfolio(u.id);
         } catch {
-          fetchPortfolio();
+          setCurrentUser(null);
         }
       } else {
-        fetchPortfolio();
+        setCurrentUser(null);
       }
+      setIsAuthChecked(true);
     }
     fetchMarketScan();
     fetchTelegramSettings();
@@ -81,7 +87,7 @@ export default function MarketMasterDashboard() {
       const json = await res.json();
       if (json.success) {
         setMarketData(json.data);
-        if (json.data.portfolioSummary) {
+        if (json.data.portfolioSummary && !currentUser) {
           setPortfolioSummary(json.data.portfolioSummary);
         }
       }
@@ -107,13 +113,14 @@ export default function MarketMasterDashboard() {
 
   const handleAuthSuccess = (user: any) => {
     setCurrentUser(user);
+    setIsAuthModalOpen(false);
     fetchPortfolio(user.id);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('karo_user_session');
     setCurrentUser(null);
-    fetchPortfolio('usr_demo');
+    setIsProfileModalOpen(false);
   };
 
   const handleManualScan = async () => {
@@ -123,9 +130,6 @@ export default function MarketMasterDashboard() {
       const json = await res.json();
       if (json.success) {
         setMarketData(json.data);
-        if (json.data.portfolioSummary) {
-          setPortfolioSummary(json.data.portfolioSummary);
-        }
       }
     } catch (err) {
       console.error('Erro ao forçar varredura:', err);
@@ -153,26 +157,32 @@ export default function MarketMasterDashboard() {
     try {
       const res = await fetch('/api/telegram');
       const json = await res.json();
-      if (json.success && json.config) {
-        setTelegramConfig(json.config);
+      if (json.success && json.data) {
+        setTelegramConfig(json.data);
       }
     } catch (err) {
-      console.error('Erro ao buscar configurações do Telegram:', err);
+      console.error('Erro ao carregar configs do Telegram:', err);
     }
   };
 
-  const saveTelegramSettings = async () => {
+  const saveTelegramSettings = async (cfg: TelegramConfig) => {
     try {
       setTelegramSending(true);
+      setTelegramStatusMsg('');
       const res = await fetch('/api/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'SAVE_CONFIG', config: telegramConfig })
+        body: JSON.stringify({ action: 'SAVE_CONFIG', config: cfg })
       });
       const json = await res.json();
-      setTelegramStatusMsg(json.message || 'Configurações salvas com sucesso!');
+      if (json.success) {
+        setTelegramConfig(cfg);
+        setTelegramStatusMsg('Configurações salvas com sucesso!');
+      } else {
+        setTelegramStatusMsg(`Erro: ${json.error || 'Não foi possível salvar'}`);
+      }
     } catch (err: any) {
-      setTelegramStatusMsg(`Erro: ${err.message}`);
+      setTelegramStatusMsg(`Erro de conexão: ${err.message}`);
     } finally {
       setTelegramSending(false);
     }
@@ -181,16 +191,20 @@ export default function MarketMasterDashboard() {
   const sendTestTelegram = async () => {
     try {
       setTelegramSending(true);
-      setTelegramStatusMsg('Enviando mensagem de teste para o celular...');
+      setTelegramStatusMsg('');
       const res = await fetch('/api/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'TEST_NOTIFICATION', config: telegramConfig })
+        body: JSON.stringify({ action: 'SEND_TEST_MESSAGE' })
       });
       const json = await res.json();
-      setTelegramStatusMsg(json.message);
+      if (json.success) {
+        setTelegramStatusMsg('Mensagem de teste enviada com sucesso no Telegram!');
+      } else {
+        setTelegramStatusMsg(`Falha no envio: ${json.error || 'Verifique Token e Chat ID'}`);
+      }
     } catch (err: any) {
-      setTelegramStatusMsg(`Falha no envio: ${err.message}`);
+      setTelegramStatusMsg(`Erro de conexão: ${err.message}`);
     } finally {
       setTelegramSending(false);
     }
@@ -202,7 +216,7 @@ export default function MarketMasterDashboard() {
   };
 
   const handleOpenCalculator = (op: SeniorAnalysisResult) => {
-    setCalcEntry(op.entryTrigger);
+    setCalcEntry(op.currentPrice);
     setCalcStop(op.stopLoss);
     setCalcTarget1(op.target1);
     setCalcTarget2(op.target2);
@@ -210,8 +224,12 @@ export default function MarketMasterDashboard() {
   };
 
   const handleFollowSignal = (op: SeniorAnalysisResult) => {
-    fetchPortfolio();
+    fetchPortfolio(currentUser?.id);
     setActiveTab('portfolio');
+  };
+
+  const handleSelectStrategyFromGoals = (modality: 'OPTIONS' | 'SWING' | 'DAYTRADE') => {
+    setActiveTab('radar');
   };
 
   const filteredOpportunities = (marketData?.topOpportunities || []).filter(op => {
@@ -223,9 +241,78 @@ export default function MarketMasterDashboard() {
     ? marketData.topOpportunities[0] 
     : null;
 
+  // ==================== TELA DE ACESSO OBRIGATÓRIO (AUTH GATE) ====================
+  if (isAuthChecked && !currentUser) {
+    return (
+      <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col justify-between">
+        <header className="border-b border-slate-800 bg-[#0d1322]/90 backdrop-blur px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Zap className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg text-white">Karo Analista Financeiro</h1>
+              <p className="text-xs text-slate-400">Inteligência Quantitativa & Opções B3 em Tempo Real</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-600/20"
+          >
+            Entrar / Criar Conta
+          </button>
+        </header>
+
+        {/* HERO DE APRESENTAÇÃO & BLOQUEIO DE ACESSO */}
+        <main className="flex-1 flex items-center justify-center p-6 text-center max-w-4xl mx-auto">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold">
+              <ShieldCheck className="w-4 h-4" /> Plataforma Restrita para Usuários Cadastrados
+            </div>
+
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+              Análise Quantitativa Institucional & <br />
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">
+                Opções Reais B3 de Alto Retorno
+              </span>
+            </h2>
+
+            <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
+              Scanner contínuo de 5 minutos alimentado por 7 escolas clássicas (Oliver Velez, Wyckoff, Al Brooks, Minervini, SMC, Elder e Williams) com gestão de risco milimétrica e precificação real da Clear e B3.
+            </p>
+
+            <div className="pt-4 flex flex-wrap items-center justify-center gap-4">
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-extrabold text-sm shadow-xl shadow-cyan-600/30 transition transform hover:scale-105 flex items-center gap-2"
+              >
+                <Sparkles className="w-5 h-5 text-amber-300" />
+                Acessar a Plataforma Agora
+              </button>
+            </div>
+          </div>
+        </main>
+
+        <footer className="border-t border-slate-800/80 bg-[#090d16] py-4 text-center text-xs text-slate-500">
+          <p>Karo Analista Financeiro • Ambiente Seguro e Criptografado</p>
+        </footer>
+
+        {/* Modal de Login / Cadastro / Recuperação de Senha / Demo */}
+        <AuthModal 
+          isOpen={true} 
+          onClose={() => {}} 
+          onAuthSuccess={handleAuthSuccess} 
+          isMandatory={true} 
+        />
+      </div>
+    );
+  }
+
+  // ==================== DASHBOARD COMPLETO (LIBERADO APÓS LOGIN) ====================
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col">
       <DisclaimerModal />
+      
       <header className="border-b border-slate-800 bg-[#0d1322]/90 backdrop-blur sticky top-0 z-50">
         <Header 
           marketData={marketData} 
@@ -233,6 +320,7 @@ export default function MarketMasterDashboard() {
           onManualScan={handleManualScan} 
           currentUser={currentUser}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onOpenProfileModal={() => setIsProfileModalOpen(true)}
           onLogout={handleLogout}
         />
 
@@ -326,45 +414,47 @@ export default function MarketMasterDashboard() {
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <DollarSign className="w-4 h-4" /> Calculadora de Risco
+            <DollarSign className="w-4 h-4" /> Calculadora de Risco (1%)
           </button>
 
           <button
             onClick={() => setActiveTab('telegram')}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'telegram' 
-                ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5' 
+                ? 'border-cyan-400 text-cyan-400 bg-cyan-500/5' 
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Smartphone className="w-4 h-4" /> Alertas Telegram VIP
+            <Smartphone className="w-4 h-4 text-cyan-400" /> Alertas Telegram
           </button>
 
           <button
             onClick={() => setActiveTab('methodologies')}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'methodologies' 
-                ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5' 
+                ? 'border-purple-400 text-purple-400 bg-purple-500/5' 
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Award className="w-4 h-4" /> 7 Escolas Institucionais
+            <Award className="w-4 h-4 text-purple-400" /> 7 Metodologias
           </button>
         </div>
       </header>
 
+      {/* CONTEÚDO PRINCIPAL DO DASHBOARD */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
         {activeTab === 'goals' && (
-          <GoalsPlannerTab 
+          <GoalsPlannerTab
             topOpportunity={topOp}
             onOpenChart={handleOpenChart}
+            onSelectStrategy={handleSelectStrategyFromGoals}
           />
         )}
 
         {activeTab === 'portfolio' && (
-          <PortfolioTab 
+          <PortfolioTab
             portfolioSummary={portfolioSummary}
-            onRefresh={fetchPortfolio}
+            onRefresh={() => fetchPortfolio(currentUser?.id)}
             onOpenChart={handleOpenChart}
           />
         )}
@@ -382,13 +472,9 @@ export default function MarketMasterDashboard() {
         )}
 
         {activeTab === 'news' && (
-          <NewsTab 
-            news={marketData?.latestNews || []} 
-            onSelectTicker={(sym) => {
-              setChartSymbol(sym);
-              setActiveTab('chart');
-            }}
-            onRefresh={handleManualScan}
+          <NewsTab
+            news={marketData?.latestNews || []}
+            onSelectTicker={handleOpenChart}
           />
         )}
 
@@ -398,8 +484,8 @@ export default function MarketMasterDashboard() {
             setChartSymbol={setChartSymbol}
             chartTimeframe={chartTimeframe}
             setChartTimeframe={setChartTimeframe}
-            chartLoading={chartLoading}
             chartData={chartData}
+            chartLoading={chartLoading}
           />
         )}
 
@@ -430,7 +516,7 @@ export default function MarketMasterDashboard() {
             setTelegramConfig={setTelegramConfig}
             telegramStatusMsg={telegramStatusMsg}
             telegramSending={telegramSending}
-            onSave={saveTelegramSettings}
+            onSave={() => saveTelegramSettings(telegramConfig)}
             onTest={sendTestTelegram}
           />
         )}
@@ -444,10 +530,20 @@ export default function MarketMasterDashboard() {
         <p>Karo Analista Financeiro • Gestão de Carteira Ativa, Mercado B3 & Criptomoedas 24/7 com Risco Controlado</p>
       </footer>
 
+      {/* Modais Globais */}
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
         onAuthSuccess={handleAuthSuccess} 
+      />
+
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={currentUser}
+        portfolioSummary={portfolioSummary}
+        onUpdateUser={(u) => setCurrentUser(u)}
+        onLogout={handleLogout}
       />
     </div>
   );

@@ -35,6 +35,54 @@ export function RadarTab({
 
   return (
     <div className="space-y-6">
+      {/* PIPELINE INSTITUCIONAL: COLETA -> AVALIAÇÃO DE CICLOS DIÁRIOS -> SUGESTÕES */}
+      <div className="bg-[#0b101d] border border-cyan-500/30 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+              ⚡
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                Esteira de Inteligência Quantitativa & Ciclos Diários
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono uppercase">
+                  Motor Ativo 5m
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                O robô consolida os dados de mercado, diagnostica as fases dos ciclos diários e apresenta apenas as entradas de maior probabilidade.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono text-cyan-300 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
+            📊 26 Ativos Monitorados • Confluência Mínima: 80%
+          </span>
+        </div>
+
+        {/* 4 ETAPAS DO PROCESSO */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span className="text-[10px] text-cyan-400 font-bold uppercase block mb-1">1. Ingestão de Dados</span>
+            <p className="text-slate-300 font-semibold leading-tight">Coleta de Candles B3 (1d, 60m, 15m, 5m) e Book de Opções</p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span className="text-[10px] text-purple-400 font-bold uppercase block mb-1">2. Ciclos Diários</span>
+            <p className="text-slate-300 font-semibold leading-tight">Mapeamento de Suportes de Fundo, Acumulação Wyckoff e SEPA</p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span className="text-[10px] text-amber-400 font-bold uppercase block mb-1">3. Confluência 5m</span>
+            <p className="text-slate-300 font-semibold leading-tight">Validação Cruzada de 7 Escolas e Detecção de Barra de Ignição</p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
+            <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">4. Sugestão Pronta</span>
+            <p className="text-emerald-200 font-bold leading-tight">Ações à Vista + Opções OTM Calibradas com Stop & Alvos</p>
+          </div>
+        </div>
+      </div>
+
       {/* BARRA DE CONTROLE E FILTROS DE MERCADO */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0d1322] p-4 rounded-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-3">

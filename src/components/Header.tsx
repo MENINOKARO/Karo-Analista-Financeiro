@@ -10,10 +10,11 @@ interface HeaderProps {
   onManualScan: () => void;
   currentUser?: any;
   onOpenAuthModal?: () => void;
+  onOpenProfileModal?: () => void;
   onLogout?: () => void;
 }
 
-export function Header({ marketData, scanning, onManualScan, currentUser, onOpenAuthModal, onLogout }: HeaderProps) {
+export function Header({ marketData, scanning, onManualScan, currentUser, onOpenAuthModal, onOpenProfileModal, onLogout }: HeaderProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -57,20 +58,26 @@ export function Header({ marketData, scanning, onManualScan, currentUser, onOpen
       <div className="flex items-center gap-3">
         {currentUser ? (
           <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
-            <div className="w-6 h-6 rounded-full bg-cyan-600/30 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-[11px]">
-              {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <div className="hidden sm:block text-left">
-              <span className="text-white font-semibold block text-[11px] leading-tight truncate max-w-[110px]">
-                {currentUser.name}
-              </span>
-              <span className="text-[9px] text-cyan-400 block font-mono">
-                {currentUser.plan || 'PRO'}
-              </span>
-            </div>
+            <button
+              onClick={onOpenProfileModal}
+              className="flex items-center gap-2 hover:opacity-80 transition text-left"
+              title="Ver Meu Perfil"
+            >
+              <div className="w-6 h-6 rounded-full bg-cyan-600/30 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-[11px]">
+                {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="hidden sm:block">
+                <span className="text-white font-semibold block text-[11px] leading-tight truncate max-w-[110px]">
+                  {currentUser.name}
+                </span>
+                <span className="text-[9px] text-cyan-400 block font-mono">
+                  {currentUser.plan || 'PRO'} • Perfil
+                </span>
+              </div>
+            </button>
             <button
               onClick={onLogout}
-              className="text-slate-400 hover:text-rose-400 text-[10px] font-semibold ml-1 transition"
+              className="text-slate-400 hover:text-rose-400 text-[10px] font-semibold ml-1.5 pl-1.5 border-l border-slate-800 transition"
               title="Sair da Conta"
             >
               Sair

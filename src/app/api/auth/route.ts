@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         success: true,
         message: 'Conta criada com sucesso!',
         user: safeUser,
-        token: 'karo_token_' + safeUser.id
+        token: `karo_token_${safeUser.id}`
       });
     }
 
@@ -69,14 +69,14 @@ export async function POST(req: NextRequest) {
         success: true,
         message: 'Login realizado com sucesso!',
         user: safeUser,
-        token: 'karo_token_' + safeUser.id
+        token: `karo_token_${safeUser.id}`
       });
     }
 
     // 3. ACESSO RÁPIDO / VISITANTE
     if (action === 'GUEST_SESSION') {
       const guestName = payload?.name || 'Investidor Visitante';
-      const guestEmail = 'visitante_' + Date.now() + '@karo.demo';
+      const guestEmail = `visitante_${Date.now()}@karo.demo`;
       const guestUser = KaroDatabase.createUser(guestName, guestEmail, 'guest_pass');
       const { passwordHash, ...safeUser } = guestUser;
 
@@ -84,7 +84,83 @@ export async function POST(req: NextRequest) {
         success: true,
         message: 'Sessão de visitante iniciada!',
         user: safeUser,
-        token: 'karo_token_' + safeUser.id
+        token: `karo_token_${safeUser.id}`
+      });
+    }
+
+    // 4. SOLICITAÇÃO DE RECUPERAÇÃO DE SENHA (ESQUECI MINHA SENHA)
+    if (action === 'FORGOT_PASSWORD') {
+      const { email } = payload;
+      if (!email) {
+        return NextResponse.json({ success: false, message: 'Por favor, informe seu e-mail.' }, { status: 400 });
+      }
+
+      try {
+        const { code, email: cleanEmail } = KaroDatabase.createPasswordResetCode(email);
+        return NextResponse.json({
+          success: true,
+          message: `Código de verificação enviado para ${cleanEmail}!`,
+          codeSimulation: code // Exibido também para facilidade imediata no ambiente web
+        });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, message: err.message }, { status: 404 });
+      }
+    }
+
+    // 5. REDEFINIÇÃO DE SENHA COM CÓDIGO
+    if (action === 'RESET_PASSWORD') {
+      const { email, code, newPassword } = payload;
+      if (!email || !code || !newPassword) {
+        return NextResponse.json({ success: false, message: 'E-mail, código e nova senha são obrigatórios.' }, { status: 400 });
+      }
+
+      try {
+        KaroDatabase.validateAndResetPassword(email, code, newPassword);
+        const user = KaroDatabase.findUserByEmail(email);
+        const { passwordHash, ...safeUser } = user!;
+
+        return NextResponse.json({
+          success: true,
+          message: 'Senha redefinida com sucesso! Você já está conectado.',
+          user: safeUser,
+          token: `karo_token_${safeUser.id}`
+        });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+      }
+    }
+
+    // 6. ATUALIZAÇÃO DE PERFIL / SENHA
+    if (action === 'UPDATE_PROFILE') {
+      const { userId, name, email, oldPassword, newPassword, riskProfile } = payload;
+      if (!userId) {
+        return NextResponse.json({ success: false, message: 'userId é obrigatório.' }, { status: 400 });
+      }
+
+      const user = KaroDatabase.findUserById(userId);
+      if (!user) {
+        return NextResponse.json({ success: false, message: 'Usuário não encontrado.' }, { status: 404 });
+      }
+
+      const updates: any = {};
+      if (name) updates.name = name;
+      if (email) updates.email = email;
+      if (riskProfile) updates.riskProfile = riskProfile;
+
+      if (newPassword) {
+        if (!oldPassword || user.passwordHash !== oldPassword) {
+          return NextResponse.json({ success: false, message: 'Senha atual incorreta.' }, { status: 401 });
+        }
+        updates.passwordHash = newPassword;
+      }
+
+      const updated = KaroDatabase.updateUserProfile(userId, updates);
+      const { passwordHash, ...safeUser } = updated;
+
+      return NextResponse.json({
+        success: true,
+        message: 'Perfil atualizado com sucesso!',
+        user: safeUser
       });
     }
 

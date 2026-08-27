@@ -9,6 +9,7 @@ export interface UserProfile {
   passwordHash: string;
   createdAt: string;
   plan: 'FREE' | 'PRO' | 'INSTITUTIONAL';
+  riskProfile?: 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE';
 }
 
 export interface StoredTradePosition extends ActivePosition {
@@ -21,10 +22,17 @@ export interface StoredTradePosition extends ActivePosition {
   notes?: string;
 }
 
+export interface PasswordResetRecord {
+  email: string;
+  code: string;
+  expiresAt: number;
+}
+
 export interface DatabaseSchema {
   users: UserProfile[];
   portfolios: Record<string, StoredTradePosition[]>; // key: userId
   closedTrades: Record<string, StoredTradePosition[]>; // key: userId
+  resetTokens?: Record<string, PasswordResetRecord>;
 }
 
 export class KaroDatabase {
@@ -39,6 +47,7 @@ export class KaroDatabase {
       if (fs.existsSync(this.DB_PATH)) {
         const raw = fs.readFileSync(this.DB_PATH, 'utf8');
         this.cachedData = JSON.parse(raw);
+        if (!this.cachedData!.resetTokens) this.cachedData!.resetTokens = {};
         return this.cachedData!;
       }
     } catch (err) {
@@ -54,7 +63,8 @@ export class KaroDatabase {
           email: 'investidor@karo.com.br',
           passwordHash: 'demo123',
           createdAt: new Date().toISOString(),
-          plan: 'INSTITUTIONAL'
+          plan: 'INSTITUTIONAL',
+          riskProfile: 'MODERATE'
         }
       ],
       portfolios: {
@@ -88,7 +98,8 @@ export class KaroDatabase {
       },
       closedTrades: {
         usr_demo: []
-      }
+      },
+      resetTokens: {}
     };
 
     this.save();
@@ -132,12 +143,13 @@ export class KaroDatabase {
     }
 
     const newUser: UserProfile = {
-      id: "usr_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: name.trim(),
       email: cleanEmail,
       passwordHash,
       createdAt: new Date().toISOString(),
-      plan: 'PRO'
+      plan: 'PRO',
+      riskProfile: 'MODERATE'
     };
 
     db.users.push(newUser);
@@ -145,6 +157,78 @@ export class KaroDatabase {
     db.closedTrades[newUser.id] = [];
     this.save();
     return newUser;
+  }
+
+  public static updateUserProfile(userId: string, data: Partial<UserProfile>): UserProfile {
+    const db = this.load();
+    const user = db.users.find(u => u.id === userId);
+    if (!user) {
+      throw new Error('Usuário não encontrado.');
+    }
+
+    if (data.name) user.name = data.name.trim();
+    if (data.email) user.email = data.email.toLowerCase().trim();
+    if (data.passwordHash) user.passwordHash = data.passwordHash;
+    if (data.riskProfile) user.riskProfile = data.riskProfile;
+    if (data.plan) user.plan = data.plan;
+
+    this.save();
+    return user;
+  }
+
+  // ==================== RECUPERAÇÃO DE SENHA POR E-MAIL ====================
+
+  public static createPasswordResetCode(email: string): { code: string; email: string } {
+    const cleanEmail = email.toLowerCase().trim();
+    const user = this.findUserByEmail(cleanEmail);
+    if (!user) {
+      throw new Error('Não encontramos nenhuma conta com este e-mail.');
+    }
+
+    const db = this.load();
+    if (!db.resetTokens) db.resetTokens = {};
+
+    // Gera código de 6 dígitos
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutos de validade
+
+    db.resetTokens[cleanEmail] = {
+      email: cleanEmail,
+      code,
+      expiresAt
+    };
+
+    this.save();
+    return { code, email: cleanEmail };
+  }
+
+  public static validateAndResetPassword(email: string, code: string, newPassword: string): boolean {
+    const cleanEmail = email.toLowerCase().trim();
+    const db = this.load();
+    if (!db.resetTokens || !db.resetTokens[cleanEmail]) {
+      throw new Error('Nenhum código de recuperação solicitado para este e-mail.');
+    }
+
+    const record = db.resetTokens[cleanEmail];
+    if (Date.now() > record.expiresAt) {
+      delete db.resetTokens[cleanEmail];
+      this.save();
+      throw new Error('O código de recuperação expirou. Solicite um novo.');
+    }
+
+    if (record.code !== code.trim()) {
+      throw new Error('Código de verificação incorreto.');
+    }
+
+    const user = this.findUserByEmail(cleanEmail);
+    if (!user) {
+      throw new Error('Usuário não encontrado.');
+    }
+
+    user.passwordHash = newPassword;
+    delete db.resetTokens[cleanEmail];
+    this.save();
+    return true;
   }
 
   // ==================== CARTEIRA & POSIÇÕES PERSISTENTES ====================

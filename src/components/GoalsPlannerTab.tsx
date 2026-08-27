@@ -9,9 +9,10 @@ import { GoalEngine } from '@/core/goal-engine';
 interface GoalsPlannerTabProps {
   topOpportunity: SeniorAnalysisResult | null;
   onOpenChart: (symbol: string) => void;
+  onSelectStrategy?: (modality: 'OPTIONS' | 'SWING' | 'DAYTRADE') => void;
 }
 
-export function GoalsPlannerTab({ topOpportunity, onOpenChart }: GoalsPlannerTabProps) {
+export function GoalsPlannerTab({ topOpportunity, onOpenChart, onSelectStrategy }: GoalsPlannerTabProps) {
   const [goalType, setGoalType] = useState<'FIXED_BRL' | 'PERCENT'>('FIXED_BRL');
   const [targetAmount, setTargetAmount] = useState<number>(300);
   const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
@@ -359,12 +360,34 @@ export function GoalsPlannerTab({ topOpportunity, onOpenChart }: GoalsPlannerTab
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => onOpenChart(defaultOp.ticker)}
-                    className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition flex items-center justify-center gap-1.5"
-                  >
-                    Ver Gráfico & Níveis de Entrada <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        const targetModality = isOption1 ? 'SWING' : isOption2 ? 'OPTIONS' : 'DAYTRADE';
+                        if (onSelectStrategy) {
+                          onSelectStrategy(targetModality);
+                        }
+                      }}
+                      className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 ${
+                        isOption1
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/20'
+                          : isOption2
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-600/20'
+                            : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-cyan-600/20'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Seguir para o Radar 5m com Esta Estratégia
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => onOpenChart(defaultOp.ticker)}
+                      className="w-full py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-[11px] font-semibold text-slate-300 transition flex items-center justify-center gap-1.5"
+                    >
+                      Ver Gráfico Técnico ({defaultOp.standardLotTicker || 'B3'})
+                    </button>
+                  </div>
                 </div>
               </div>
             );

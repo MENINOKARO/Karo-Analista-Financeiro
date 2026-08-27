@@ -176,16 +176,34 @@ export class KaroDatabase {
     return user;
   }
 
+  public static syncUsers(incomingUsers: UserProfile[]): void {
+    const db = this.load();
+    for (const u of incomingUsers) {
+      if (!u.email) continue;
+      const cleanEmail = u.email.toLowerCase().trim();
+      const existing = db.users.find(x => x.email.toLowerCase().trim() === cleanEmail);
+      if (!existing) {
+        db.users.push(u);
+        if (!db.portfolios[u.id]) db.portfolios[u.id] = [];
+        if (!db.closedTrades[u.id]) db.closedTrades[u.id] = [];
+      } else {
+        existing.name = u.name || existing.name;
+        existing.passwordHash = u.passwordHash || existing.passwordHash;
+        existing.plan = u.plan || existing.plan;
+        existing.riskProfile = u.riskProfile || existing.riskProfile;
+      }
+    }
+    this.save();
+  }
+
   // ==================== RECUPERAÇÃO DE SENHA POR E-MAIL ====================
 
-  public static createPasswordResetCode(email: string, name?: string): { code: string; email: string; user: UserProfile } {
+  public static createPasswordResetCode(email: string): { code: string; email: string; user: UserProfile } {
     const cleanEmail = email.toLowerCase().trim();
-    let user = this.findUserByEmail(cleanEmail);
+    const user = this.findUserByEmail(cleanEmail);
     
-    // Se o usuário ainda não existir na base, auto-registra imediatamente
     if (!user) {
-      const defaultName = name || cleanEmail.split('@')[0].replace('.', ' ').toUpperCase();
-      user = this.createUser(defaultName, cleanEmail, 'temp_reset_pass_123');
+      throw new Error('Não encontramos nenhuma conta com este e-mail. Por favor, crie seu cadastro.');
     }
 
     const db = this.load();
@@ -209,18 +227,16 @@ export class KaroDatabase {
     const cleanEmail = email.toLowerCase().trim();
     const db = this.load();
     
-    if (!db.resetTokens) db.resetTokens = {};
-    
-    let record = db.resetTokens[cleanEmail];
-    
-    // Se não houver token em memória, aceita qualquer código válido de 6 dígitos ou cria token
-    if (!record) {
-      record = {
-        email: cleanEmail,
-        code: code.trim(),
-        expiresAt: Date.now() + 30 * 60 * 1000
-      };
+    const user = this.findUserByEmail(cleanEmail);
+    if (!user) {
+      throw new Error('Conta não encontrada.');
     }
+
+    if (!db.resetTokens || !db.resetTokens[cleanEmail]) {
+      throw new Error('Nenhum código de recuperação ativo para este e-mail.');
+    }
+    
+    const record = db.resetTokens[cleanEmail];
 
     if (Date.now() > record.expiresAt) {
       delete db.resetTokens[cleanEmail];
@@ -228,18 +244,11 @@ export class KaroDatabase {
       throw new Error('O código de recuperação expirou. Solicite um novo.');
     }
 
-    if (record.code !== code.trim() && code.trim().length !== 6) {
+    if (record.code !== code.trim()) {
       throw new Error('Código de verificação incorreto.');
     }
 
-    let user = this.findUserByEmail(cleanEmail);
-    if (!user) {
-      const defaultName = cleanEmail.split('@')[0].replace('.', ' ').toUpperCase();
-      user = this.createUser(defaultName, cleanEmail, newPassword);
-    } else {
-      user.passwordHash = newPassword;
-    }
-
+    user.passwordHash = newPassword;
     delete db.resetTokens[cleanEmail];
     this.save();
     return user;

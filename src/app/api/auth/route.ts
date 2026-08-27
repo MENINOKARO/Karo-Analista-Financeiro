@@ -29,6 +29,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action, payload } = body;
 
+    // 0. SINCRONIZAÇÃO DE USUÁRIOS DO CLIENTE
+    if (action === 'SYNC_USERS') {
+      const { users } = payload;
+      if (Array.isArray(users) && users.length > 0) {
+        KaroDatabase.syncUsers(users);
+      }
+      return NextResponse.json({ success: true, message: 'Banco de dados sincronizado.' });
+    }
+
     // 1. CADASTRO DE USUÁRIO
     if (action === 'REGISTER') {
       const { name, email, password } = payload;
@@ -38,7 +47,7 @@ export async function POST(req: NextRequest) {
 
       const existing = KaroDatabase.findUserByEmail(email);
       if (existing) {
-        return NextResponse.json({ success: false, message: 'Este e-mail já está cadastrado.' }, { status: 409 });
+        return NextResponse.json({ success: false, message: 'Este e-mail já está cadastrado. Por favor, faça login.' }, { status: 409 });
       }
 
       const newUser = KaroDatabase.createUser(name, email, password);
@@ -52,20 +61,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. LOGIN DE USUÁRIO
+    // 2. LOGIN DE USUÁRIO (VALIDAÇÃO ESTRITA DE SENHA E CADASTRO)
     if (action === 'LOGIN') {
       const { email, password } = payload;
       if (!email || !password) {
         return NextResponse.json({ success: false, message: 'E-mail e senha são obrigatórios.' }, { status: 400 });
       }
 
-      let user = KaroDatabase.findUserByEmail(email);
+      const user = KaroDatabase.findUserByEmail(email);
       if (!user) {
-        // Auto-provisiona a conta se for primeiro acesso
-        const defaultName = email.split('@')[0].replace('.', ' ').toUpperCase();
-        user = KaroDatabase.createUser(defaultName, email, password);
-      } else if (user.passwordHash !== password) {
-        return NextResponse.json({ success: false, message: 'E-mail ou senha incorretos.' }, { status: 401 });
+        return NextResponse.json({ 
+          success: false, 
+          message: 'Usuário não cadastrado. Por favor, crie uma conta na aba Cadastrar.' 
+        }, { status: 404 });
+      }
+
+      if (user.passwordHash !== password) {
+        return NextResponse.json({ 
+          success: false, 
+          message: 'Senha incorreta. Verifique sua senha ou use a recuperação de senha.' 
+        }, { status: 401 });
       }
 
       const { passwordHash, ...safeUser } = user;
@@ -109,7 +124,7 @@ export async function POST(req: NextRequest) {
           user: safeUser
         });
       } catch (err: any) {
-        return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+        return NextResponse.json({ success: false, message: err.message }, { status: 404 });
       }
     }
 

@@ -28,56 +28,149 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Carrega lista de usuários registrados no navegador
+  const getLocalUsers = (): any[] => {
+    try {
+      const raw = localStorage.getItem('karo_registered_users_v2');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Salva e sincroniza usuário localmente e com o servidor
+  const persistUserLocal = (user: any, pass: string) => {
+    try {
+      const users = getLocalUsers();
+      const cleanEmail = user.email.toLowerCase().trim();
+      const existingIdx = users.findIndex((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+      const record = { ...user, passwordHash: pass };
+      if (existingIdx >= 0) {
+        users[existingIdx] = record;
+      } else {
+        users.push(record);
+      }
+      localStorage.setItem('karo_registered_users_v2', JSON.stringify(users));
+
+      // Sincroniza em background com o servidor
+      fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'SYNC_USERS', payload: { users } })
+      }).catch(() => {});
+    } catch {}
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
 
+    const cleanEmail = email.toLowerCase().trim();
+
     try {
-      if (tab === 'LOGIN' || tab === 'REGISTER') {
-        const action = tab;
-        const payload = tab === 'REGISTER' ? { name, email, password } : { email, password };
+      // 1. CADASTRO DE NOVO USUÁRIO
+      if (tab === 'REGISTER') {
+        const localUsers = getLocalUsers();
+        if (localUsers.some((u: any) => u.email?.toLowerCase().trim() === cleanEmail)) {
+          throw new Error('Este e-mail já está cadastrado. Por favor, faça login.');
+        }
 
         const res = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, payload })
+          body: JSON.stringify({ action: 'REGISTER', payload: { name, email: cleanEmail, password } })
         });
 
         const data = await res.json();
-
         if (!res.ok || !data.success) {
-          throw new Error(data.message || 'Erro ao processar autenticação.');
+          throw new Error(data.message || 'Erro ao criar conta.');
         }
 
+        persistUserLocal(data.user, password);
         localStorage.setItem('karo_user_session', JSON.stringify(data.user));
         onAuthSuccess(data.user);
         onClose();
-      } else if (tab === 'FORGOT') {
+      }
+
+      // 2. LOGIN DE USUÁRIO (VALIDAÇÃO ESTRITA)
+      else if (tab === 'LOGIN') {
+        const localUsers = getLocalUsers();
+        const localUser = localUsers.find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+
+        // Se o usuário existe localmente, verifica a senha antes de qualquer coisa
+        if (localUser && localUser.passwordHash !== password) {
+          throw new Error('Senha incorreta. Verifique sua senha ou use a recuperação de senha.');
+        }
+
+        // Tenta autenticação com o servidor
         const res = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'FORGOT_PASSWORD', payload: { email } })
+          body: JSON.stringify({ action: 'LOGIN', payload: { email: cleanEmail, password } })
         });
 
         const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.message || 'E-mail não encontrado.');
+
+        // Se o servidor confirmou
+        if (res.ok && data.success) {
+          persistUserLocal(data.user, password);
+          localStorage.setItem('karo_user_session', JSON.stringify(data.user));
+          onAuthSuccess(data.user);
+          onClose();
+          return;
         }
 
-        if (data.codeSimulation) {
-          setResetCode(data.codeSimulation);
+        // Se o servidor não encontrou mas temos no navegador com a senha correta
+        if (localUser && localUser.passwordHash === password) {
+          const { passwordHash, ...safeUser } = localUser;
+          // Sincroniza com o servidor
+          fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'SYNC_USERS', payload: { users: localUsers } })
+          }).catch(() => {});
+
+          localStorage.setItem('karo_user_session', JSON.stringify(safeUser));
+          onAuthSuccess(safeUser);
+          onClose();
+          return;
         }
-        setSuccessMsg(`Código de recuperação gerado com sucesso para ${email}!`);
+
+        throw new Error(data.message || 'Usuário não encontrado. Por favor, crie uma conta na aba Cadastrar.');
+      }
+
+      // 3. RECUPERAÇÃO DE SENHA (ESQUECI MINHA SENHA)
+      else if (tab === 'FORGOT') {
+        const localUsers = getLocalUsers();
+        const userExists = localUsers.some((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'FORGOT_PASSWORD', payload: { email: cleanEmail } })
+        });
+
+        const data = await res.json();
+        if ((!res.ok || !data.success) && !userExists) {
+          throw new Error('Não encontramos nenhuma conta com este e-mail. Por favor, crie seu cadastro.');
+        }
+
+        const generatedCode = data.codeSimulation || Math.floor(100000 + Math.random() * 900000).toString();
+        setResetCode(generatedCode);
+        setSuccessMsg(`Código de recuperação enviado para ${cleanEmail}!`);
         setTab('RESET');
-      } else if (tab === 'RESET') {
+      }
+
+      // 4. SALVAR NOVA SENHA
+      else if (tab === 'RESET') {
         const res = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             action: 'RESET_PASSWORD', 
-            payload: { email, code: resetCode, newPassword } 
+            payload: { email: cleanEmail, code: resetCode, newPassword } 
           })
         });
 
@@ -86,12 +179,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error(data.message || 'Erro ao redefinir senha.');
         }
 
+        persistUserLocal(data.user, newPassword);
         localStorage.setItem('karo_user_session', JSON.stringify(data.user));
         onAuthSuccess(data.user);
         onClose();
       }
     } catch (err: any) {
-      setError(err.message || 'Falha na conexão.');
+      setError(err.message || 'Falha na autenticação.');
     } finally {
       setLoading(false);
     }

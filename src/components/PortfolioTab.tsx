@@ -35,11 +35,16 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   const handleAddManual = async () => {
     try {
       setLoadingAction(true);
+      const userSession = typeof window !== 'undefined' ? localStorage.getItem('karo_user_session') : null;
+      const parsedUser = userSession ? JSON.parse(userSession) : null;
+      const userId = parsedUser?.id || 'usr_demo';
+
       const res = await fetch('/api/portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'ADD_MANUAL',
+          userId,
           payload: {
             ticker: manualTicker,
             name: manualName,
@@ -66,10 +71,14 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   const handleRemovePosition = async (id: string) => {
     try {
       setLoadingAction(true);
+      const userSession = typeof window !== 'undefined' ? localStorage.getItem('karo_user_session') : null;
+      const parsedUser = userSession ? JSON.parse(userSession) : null;
+      const userId = parsedUser?.id || 'usr_demo';
+
       await fetch('/api/portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'REMOVE_POSITION', payload: { id } })
+        body: JSON.stringify({ action: 'REMOVE_POSITION', userId, payload: { id } })
       });
       onRefresh();
     } catch (err) {
@@ -172,9 +181,15 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold text-white tracking-tight">{pos.ticker}</span>
                           <span className="text-xs text-slate-400">({pos.name})</span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 font-mono">
-                            {pos.quantity} cotas
-                          </span>
+                          {pos.modality === 'OPTIONS' || (pos.ticker.length >= 7 && !pos.ticker.includes('.SA') && !pos.ticker.includes('USD')) ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30 font-mono">
+                              💎 Opção B3 • {pos.quantity} un
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 font-mono">
+                              {pos.quantity} cotas
+                            </span>
+                          )}
                         </div>
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Origem: {pos.originSetup || 'Entrada Registrada'}
@@ -196,16 +211,24 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                     {/* Dados de Preço, Stop e Alvos */}
                     <div className="grid grid-cols-4 gap-2 bg-slate-900/90 border border-slate-800 p-3 rounded-xl mb-3 text-center text-xs">
                       <div>
-                        <span className="text-[10px] uppercase text-slate-400 block">Preço Compra</span>
+                        <span className="text-[10px] uppercase text-slate-400 block">
+                          {pos.modality === 'OPTIONS' ? 'Prêmio Pago' : 'Preço Compra'}
+                        </span>
                         <span className="font-bold text-white font-mono">R$ {pos.entryPrice.toFixed(2)}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase text-cyan-400 block">Cotação Atual</span>
+                        <span className="text-[10px] uppercase text-cyan-400 block">
+                          {pos.modality === 'OPTIONS' ? 'Prêmio Atual' : 'Cotação Atual'}
+                        </span>
                         <span className="font-bold text-cyan-300 font-mono">R$ {pos.currentPrice.toFixed(2)}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase text-rose-400 block">Stop Loss Atual</span>
-                        <span className="font-bold text-rose-400 font-mono">R$ {pos.stopLoss.toFixed(2)}</span>
+                        <span className="text-[10px] uppercase text-rose-400 block">
+                          {pos.modality === 'OPTIONS' ? 'Risco Máx' : 'Stop Loss'}
+                        </span>
+                        <span className="font-bold text-rose-400 font-mono">
+                          {pos.modality === 'OPTIONS' ? `R$ ${(pos.entryPrice * pos.quantity).toFixed(2)}` : `R$ ${pos.stopLoss.toFixed(2)}`}
+                        </span>
                       </div>
                       <div>
                         <span className="text-[10px] uppercase text-emerald-400 block">Alvo 1</span>

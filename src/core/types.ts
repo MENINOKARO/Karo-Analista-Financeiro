@@ -258,6 +258,9 @@ export interface ActivePosition {
   status: 'ABERTA' | 'ALVO_1_ATINGIDO' | 'STOP_BREAKEVEN' | 'ENCERRADA_LUCRO' | 'ENCERRADA_STOP';
   robotAdvice: string;
   originSetup?: string;
+  modality?: 'OPTIONS' | 'SWING' | 'DAYTRADE';
+  optionTicker?: string;
+  optionStrike?: number;
 }
 
 export interface PortfolioSummary {

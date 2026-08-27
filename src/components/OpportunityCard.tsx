@@ -75,16 +75,57 @@ export function OpportunityCard({ op, onOpenChart, onOpenCalculator, onFollowSig
   const handleFollowClick = async () => {
     try {
       setFollowingLoading(true);
+      const userSession = typeof window !== 'undefined' ? localStorage.getItem('karo_user_session') : null;
+      const parsedUser = userSession ? JSON.parse(userSession) : null;
+      const userId = parsedUser?.id || 'usr_demo';
+
+      let followPayload: any = {
+        signal: op,
+        modality: modalidade
+      };
+
+      if (modalidade === 'OPTIONS') {
+        followPayload = {
+          ...followPayload,
+          quantity: optContracts,
+          customEntry: currentStrategy.costOrIncomePerUnit,
+          optionTicker: currentStrategy.leg1.ticker,
+          optionStrike: currentStrategy.leg1.strike,
+          optionType: currentStrategy.leg1.optionType,
+          strategyTitle: currentStrategy.title,
+          stopLoss: 0.00,
+          target1: currentStrategy.breakevenPrice,
+          target2: Number((currentStrategy.breakevenPrice * 1.15).toFixed(2))
+        };
+      } else if (modalidade === 'SWING') {
+        followPayload = {
+          ...followPayload,
+          quantity: simulatedQty,
+          customEntry: sw.entryPrice,
+          stopLoss: sw.stopLoss,
+          target1: sw.target1,
+          target2: sw.target2,
+          strategyTitle: 'Swing Trade em Ações B3'
+        };
+      } else {
+        followPayload = {
+          ...followPayload,
+          quantity: simulatedQty,
+          customEntry: dt.entryTrigger,
+          stopLoss: dt.stopLoss,
+          target1: dt.target1,
+          target2: dt.target2,
+          strategyTitle: 'Day Trade (5m)'
+        };
+      }
+
       const res = await fetch('/api/portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'FOLLOW_SIGNAL',
-          payload: {
-            signal: op,
-            quantity: simulatedQty,
-            customEntry: op.entryTrigger
-          }
+          userId,
+          payload: followPayload
         })
       });
       const json = await res.json();

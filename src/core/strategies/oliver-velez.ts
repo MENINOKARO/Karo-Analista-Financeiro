@@ -25,10 +25,43 @@ export class OliverVelezStrategy {
       const recentRanges = candles.slice(Math.max(0, idx - 8), idx).map(c => c.high - c.low);
       const avgRange = recentRanges.length > 0 ? (recentRanges.reduce((a, b) => a + b, 0) / recentRanges.length) : currentRange;
 
-      // 1. GREEN ELEPHANT BAR (Barra Elefante de Compra)
+      // 1. IGNITING BAR / SUBIDA FORTE DE FUNDO (Padrão de Rompimento Explosivo com Volume)
+      const prior3High = Math.max(...candles.slice(Math.max(0, idx - 4), idx).map(c => c.high));
+      const pctGain = (current.close - current.open) / (current.open || 1);
+      const closeNearHigh = (current.close - current.low) / (currentRange || 1) >= 0.75;
+      
+      const isIgnitingBreakout = (
+        current.close > current.open &&
+        (pctGain >= 0.030 || currentRange >= avgRange * 1.4) &&
+        closeNearHigh &&
+        current.close >= prior3High * 0.998
+      );
+
+      if (isIgnitingBreakout) {
+        const lastPrice = candles[n - 1].close;
+        const entry = Number(lastPrice.toFixed(2));
+        const stop = Number((current.low - 0.02).toFixed(2));
+        const risk = Math.max(0.20, entry - stop);
+        const target1 = Number((entry + (risk * 2.2)).toFixed(2));
+        const target2 = Number((entry + (risk * 4.0)).toFixed(2));
+
+        return {
+          name: 'Oliver Velez - Barra de Ignição / Explosão de Momentum de Fundo',
+          category: 'VELEZ',
+          direction: 'BUY',
+          confidence: 94,
+          description: `🚀 Subida Forte com Barra de Ignição (+${(pctGain * 100).toFixed(1)}%): Compradores institucionais assumiram o controle total partindo de uma base de acumulação, rompendo topos anteriores com fechamento na máxima.`,
+          entryPrice: entry,
+          stopPrice: stop,
+          targetPrice1: target1,
+          targetPrice2: target2
+        };
+      }
+
+      // 2. GREEN ELEPHANT BAR (Barra Elefante Padrão)
       const isElephantBull = (
         current.close > current.open &&
-        currentRange >= avgRange * 1.3 &&
+        currentRange >= avgRange * 1.25 &&
         (currentBody / (currentRange || 1)) >= 0.60 &&
         current.close >= currentEma20 * 0.998
       );

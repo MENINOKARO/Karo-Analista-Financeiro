@@ -8,9 +8,12 @@ interface HeaderProps {
   marketData: MarketOverview | null;
   scanning: boolean;
   onManualScan: () => void;
+  currentUser?: any;
+  onOpenAuthModal?: () => void;
+  onLogout?: () => void;
 }
 
-export function Header({ marketData, scanning, onManualScan }: HeaderProps) {
+export function Header({ marketData, scanning, onManualScan, currentUser, onOpenAuthModal, onLogout }: HeaderProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -52,6 +55,36 @@ export function Header({ marketData, scanning, onManualScan }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        {currentUser ? (
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
+            <div className="w-6 h-6 rounded-full bg-cyan-600/30 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-[11px]">
+              {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div className="hidden sm:block text-left">
+              <span className="text-white font-semibold block text-[11px] leading-tight truncate max-w-[110px]">
+                {currentUser.name}
+              </span>
+              <span className="text-[9px] text-cyan-400 block font-mono">
+                {currentUser.plan || 'PRO'}
+              </span>
+            </div>
+            <button
+              onClick={onLogout}
+              className="text-slate-400 hover:text-rose-400 text-[10px] font-semibold ml-1 transition"
+              title="Sair da Conta"
+            >
+              Sair
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onOpenAuthModal}
+            className="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs transition"
+          >
+            Entrar / Cadastrar
+          </button>
+        )}
+
         <button 
           onClick={onManualScan}
           disabled={scanning}

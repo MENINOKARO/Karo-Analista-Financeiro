@@ -14,6 +14,7 @@ import { GoalsPlannerTab } from '@/components/GoalsPlannerTab';
 import { BrokersTab } from '@/components/BrokersTab';
 import { PortfolioTab } from '@/components/PortfolioTab';
 import { DisclaimerModal } from '@/components/DisclaimerModal';
+import { AuthModal } from '@/components/AuthModal';
 
 export default function MarketMasterDashboard() {
   const [activeTab, setActiveTab] = useState<'goals' | 'portfolio' | 'radar' | 'news' | 'chart' | 'calculator' | 'brokers' | 'telegram' | 'methodologies'>('goals');
@@ -22,6 +23,8 @@ export default function MarketMasterDashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   const [scanning, setScanning] = useState<boolean>(false);
   const [filterAction, setFilterAction] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   
   // Gráficos
   const [chartSymbol, setChartSymbol] = useState<string>('PETR4.SA');
@@ -48,8 +51,22 @@ export default function MarketMasterDashboard() {
   const [telegramSending, setTelegramSending] = useState<boolean>(false);
 
   useEffect(() => {
+    // Carrega sessão de usuário persistida
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('karo_user_session');
+      if (savedUser) {
+        try {
+          const u = JSON.parse(savedUser);
+          setCurrentUser(u);
+          fetchPortfolio(u.id);
+        } catch {
+          fetchPortfolio();
+        }
+      } else {
+        fetchPortfolio();
+      }
+    }
     fetchMarketScan();
-    fetchPortfolio();
     fetchTelegramSettings();
   }, []);
 
@@ -75,9 +92,10 @@ export default function MarketMasterDashboard() {
     }
   };
 
-  const fetchPortfolio = async () => {
+  const fetchPortfolio = async (uid?: string) => {
     try {
-      const res = await fetch('/api/portfolio');
+      const targetUserId = uid || currentUser?.id || 'usr_demo';
+      const res = await fetch(`/api/portfolio?userId=${targetUserId}`);
       const json = await res.json();
       if (json.success && json.data) {
         setPortfolioSummary(json.data);
@@ -85,6 +103,17 @@ export default function MarketMasterDashboard() {
     } catch (err) {
       console.error('Erro ao carregar carteira:', err);
     }
+  };
+
+  const handleAuthSuccess = (user: any) => {
+    setCurrentUser(user);
+    fetchPortfolio(user.id);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('karo_user_session');
+    setCurrentUser(null);
+    fetchPortfolio('usr_demo');
   };
 
   const handleManualScan = async () => {
@@ -202,6 +231,9 @@ export default function MarketMasterDashboard() {
           marketData={marketData} 
           scanning={scanning} 
           onManualScan={handleManualScan} 
+          currentUser={currentUser}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onLogout={handleLogout}
         />
 
         <div className="max-w-7xl mx-auto px-4 flex gap-2 border-t border-slate-800/60 overflow-x-auto">
@@ -409,8 +441,14 @@ export default function MarketMasterDashboard() {
       </main>
 
       <footer className="border-t border-slate-800/80 bg-[#090d16] py-4 text-center text-xs text-slate-500">
-        <p>MarketMaster AI • Gestão de Carteira Ativa, Mercado B3 & Criptomoedas 24/7 com Risco Controlado</p>
+        <p>Karo Analista Financeiro • Gestão de Carteira Ativa, Mercado B3 & Criptomoedas 24/7 com Risco Controlado</p>
       </footer>
+
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+        onAuthSuccess={handleAuthSuccess} 
+      />
     </div>
   );
 }

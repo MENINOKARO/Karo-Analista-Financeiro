@@ -223,19 +223,19 @@ export class KaroDatabase {
     return { code, email: cleanEmail, user };
   }
 
-  public static validateAndResetPassword(email: string, code: string, newPassword: string): UserProfile {
+  public static verifyPasswordResetCode(email: string, code: string): boolean {
     const cleanEmail = email.toLowerCase().trim();
     const db = this.load();
-    
+
     const user = this.findUserByEmail(cleanEmail);
     if (!user) {
       throw new Error('Conta não encontrada.');
     }
 
     if (!db.resetTokens || !db.resetTokens[cleanEmail]) {
-      throw new Error('Nenhum código de recuperação ativo para este e-mail.');
+      throw new Error('Nenhum código de recuperação ativo para este e-mail. Solicite um novo.');
     }
-    
+
     const record = db.resetTokens[cleanEmail];
 
     if (Date.now() > record.expiresAt) {
@@ -245,11 +245,25 @@ export class KaroDatabase {
     }
 
     if (record.code !== code.trim()) {
-      throw new Error('Código de verificação incorreto.');
+      throw new Error('Código de verificação incorreto. Verifique seu e-mail e tente novamente.');
     }
 
+    return true;
+  }
+
+  public static validateAndResetPassword(email: string, code: string, newPassword: string): UserProfile {
+    const cleanEmail = email.toLowerCase().trim();
+    const db = this.load();
+    
+    const user = this.findUserByEmail(cleanEmail);
+    if (!user) {
+      throw new Error('Conta não encontrada.');
+    }
+
+    this.verifyPasswordResetCode(cleanEmail, code);
+
     user.passwordHash = newPassword;
-    delete db.resetTokens[cleanEmail];
+    if (db.resetTokens) delete db.resetTokens[cleanEmail];
     this.save();
     return user;
   }

@@ -16,12 +16,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onAuthSuccess,
   isMandatory = false
 }) => {
-  const [tab, setTab] = useState<'LOGIN' | 'REGISTER' | 'FORGOT' | 'RESET'>('LOGIN');
+  const [tab, setTab] = useState<'LOGIN' | 'REGISTER' | 'FORGOT' | 'VERIFY_CODE' | 'NEW_PASSWORD'>('LOGIN');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -125,7 +127,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         // Se o servidor não encontrou mas temos no navegador com a senha correta
         if (localUser && localUser.passwordHash === password) {
           const { passwordHash, ...safeUser } = localUser;
-          // Sincroniza com o servidor
           fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -138,10 +139,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           return;
         }
 
-        throw new Error(data.message || 'Usuário não encontrado. Por favor, crie uma conta na aba Cadastrar.');
+        throw new Error(data.message || 'Usuário não cadastrado. Por favor, crie uma conta na aba Cadastrar.');
       }
 
-      // 3. RECUPERAÇÃO DE SENHA (ESQUECI MINHA SENHA)
+      // 3. ETAPA 1 DE RECUPERAÇÃO: SOLICITAR CÓDIGO POR E-MAIL
       else if (tab === 'FORGOT') {
         const localUsers = getLocalUsers();
         const userExists = localUsers.some((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
@@ -158,25 +159,65 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         const generatedCode = data.codeSimulation || Math.floor(100000 + Math.random() * 900000).toString();
-        setResetCode(generatedCode);
-        setSuccessMsg(`Código de recuperação enviado para ${cleanEmail}!`);
-        setTab('RESET');
+        setSimulatedCode(generatedCode);
+        setResetCode('');
+        setSuccessMsg(`Código de verificação de 6 dígitos enviado para ${cleanEmail}!`);
+        setTab('VERIFY_CODE');
       }
 
-      // 4. SALVAR NOVA SENHA
-      else if (tab === 'RESET') {
+      // 4. ETAPA 2 DE RECUPERAÇÃO: VALIDAR CÓDIGO (NÃO ABRE A SENHA SE ERRADO)
+      else if (tab === 'VERIFY_CODE') {
+        if (!resetCode || resetCode.trim().length !== 6) {
+          throw new Error('Por favor, digite o código de 6 dígitos que foi enviado para o seu e-mail.');
+        }
+
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            action: 'VERIFY_RESET_CODE', 
+            payload: { email: cleanEmail, code: resetCode.trim() } 
+          })
+        });
+
+        const data = await res.json();
+
+        // Se o servidor rejeitou ou se o código não confere com o código gerado
+        if (!res.ok || !data.success) {
+          if (simulatedCode && resetCode.trim() === simulatedCode) {
+            // Sucesso validado
+          } else {
+            throw new Error(data.message || 'Código de verificação incorreto. Verifique seu e-mail e tente novamente.');
+          }
+        }
+
+        // Código correto -> Avança para a etapa 3 (abrir campos de nova senha)
+        setSuccessMsg('Código validado com sucesso! Agora cadastre sua nova senha.');
+        setTab('NEW_PASSWORD');
+      }
+
+      // 5. ETAPA 3 DE RECUPERAÇÃO: CADASTRAR NOVA SENHA
+      else if (tab === 'NEW_PASSWORD') {
+        if (!newPassword || newPassword.length < 4) {
+          throw new Error('A nova senha deve ter no mínimo 4 caracteres.');
+        }
+
+        if (newPassword !== confirmPassword) {
+          throw new Error('As senhas não coincidem. Digite a mesma senha nos dois campos.');
+        }
+
         const res = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             action: 'RESET_PASSWORD', 
-            payload: { email: cleanEmail, code: resetCode, newPassword } 
+            payload: { email: cleanEmail, code: resetCode.trim(), newPassword } 
           })
         });
 
         const data = await res.json();
         if (!res.ok || !data.success) {
-          throw new Error(data.message || 'Erro ao redefinir senha.');
+          throw new Error(data.message || 'Erro ao salvar a nova senha.');
         }
 
         persistUserLocal(data.user, newPassword);
@@ -222,7 +263,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Botão Fechar (apenas se não for obrigatório) */}
+        {/* Botão Fechar */}
         {!isMandatory && (
           <button
             onClick={onClose}
@@ -235,20 +276,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Header do Modal */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3 shadow-inner">
-            {tab === 'FORGOT' || tab === 'RESET' ? <KeyRound className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
+            {tab === 'FORGOT' || tab === 'VERIFY_CODE' || tab === 'NEW_PASSWORD' ? (
+              <KeyRound className="w-6 h-6" />
+            ) : (
+              <ShieldCheck className="w-6 h-6" />
+            )}
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight">
             {tab === 'LOGIN' && 'Acessar o Karo Analista'}
-            {tab === 'REGISTER' && 'Criar sua Conta Pro'}
+            {tab === 'REGISTER' && 'Criar sua Conta'}
             {tab === 'FORGOT' && 'Recuperar sua Senha'}
-            {tab === 'RESET' && 'Criar Nova Senha'}
+            {tab === 'VERIFY_CODE' && 'Validar Código do E-mail'}
+            {tab === 'NEW_PASSWORD' && 'Cadastrar Nova Senha'}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            {isMandatory ? '🔒 Identifique-se para liberar o acesso ao sistema' : 'Inteligência Quantitativa B3 & Gestão Institucional'}
+            {tab === 'FORGOT' && 'Passo 1 de 3: Digite seu e-mail cadastrado'}
+            {tab === 'VERIFY_CODE' && 'Passo 2 de 3: Insira o código de 6 dígitos enviado'}
+            {tab === 'NEW_PASSWORD' && 'Passo 3 de 3: Defina sua nova senha de acesso'}
+            {(tab === 'LOGIN' || tab === 'REGISTER') && (isMandatory ? '🔒 Identifique-se para liberar o acesso ao sistema' : 'Inteligência Quantitativa B3 & Gestão Institucional')}
           </p>
         </div>
 
-        {/* Abas Entrar / Criar Conta (quando em modo normal) */}
+        {/* Abas Entrar / Criar Conta (apenas em LOGIN ou REGISTER) */}
         {(tab === 'LOGIN' || tab === 'REGISTER') && (
           <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 mb-5 text-xs font-semibold">
             <button
@@ -270,7 +319,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* Mensagens de Alerta */}
+        {/* Mensagens de Alerta e Erro */}
         {error && (
           <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium">
             ⚠️ {error}
@@ -286,6 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Formulário Principal */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* CAMPO NOME (APENAS EM REGISTER) */}
           {tab === 'REGISTER' && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-300 mb-1">Nome Completo</label>
@@ -303,6 +353,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
+          {/* CAMPO EMAIL (EM LOGIN, REGISTER, FORGOT) */}
           {(tab === 'LOGIN' || tab === 'REGISTER' || tab === 'FORGOT') && (
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -331,6 +382,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
+          {/* CAMPO SENHA (EM LOGIN E REGISTER) */}
           {(tab === 'LOGIN' || tab === 'REGISTER') && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-300 mb-1">Senha</label>
@@ -348,35 +400,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {tab === 'RESET' && (
-            <>
-              {successMsg && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-xl space-y-1.5">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Código de Recuperação Gerado!</span>
+          {/* ETAPA 2: VALIDAR CÓDIGO DE 6 DÍGITOS */}
+          {tab === 'VERIFY_CODE' && (
+            <div className="space-y-3">
+              {simulatedCode && (
+                <div className="bg-slate-900/90 border border-cyan-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Código enviado para o e-mail:</span>
+                    <span className="font-mono font-bold text-cyan-400 tracking-widest">{simulatedCode}</span>
                   </div>
-                  <p className="text-[11px] text-emerald-200/90 leading-tight">
-                    Enviamos o código para <strong>{email}</strong>.
-                  </p>
-                  {resetCode && (
-                    <div className="flex items-center justify-between bg-slate-900/90 p-2 rounded-lg border border-emerald-500/30">
-                      <span className="text-[10px] text-slate-400">Seu código:</span>
-                      <span className="font-mono font-bold text-sm tracking-widest text-emerald-400">{resetCode}</span>
-                      <button
-                        type="button"
-                        onClick={() => setResetCode(resetCode)}
-                        className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold hover:bg-emerald-500/30"
-                      >
-                        Autopreenchido ✓
-                      </button>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setResetCode(simulatedCode)}
+                    className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded font-bold hover:bg-cyan-500/30"
+                  >
+                    Inserir Código
+                  </button>
                 </div>
               )}
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Código de 6 Dígitos Enviado</label>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Código de 6 Dígitos do E-mail
+                </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                   <input
@@ -386,11 +432,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="Ex: 849201"
                     value={resetCode}
                     onChange={(e) => setResetCode(e.target.value)}
-                    className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono tracking-widest placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+                    className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-center text-white font-mono tracking-widest placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition"
                   />
                 </div>
               </div>
+            </div>
+          )}
 
+          {/* ETAPA 3: CADASTRAR NOVA SENHA (SÓ ABRE APÓS CÓDIGO SER VALIDADO) */}
+          {tab === 'NEW_PASSWORD' && (
+            <div className="space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">Nova Senha</label>
                 <div className="relative">
@@ -398,34 +449,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="password"
                     required
-                    placeholder="Sua nova senha"
+                    placeholder="Nova senha (mínimo 4 caracteres)"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
                   />
                 </div>
               </div>
-            </>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Confirmar Nova Senha</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="Repita a nova senha"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+                  />
+                </div>
+              </div>
+            </div>
           )}
 
+          {/* BOTÃO PRINCIPAL DE AÇÃO */}
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 transition flex items-center justify-center gap-2 mt-2"
           >
-            {loading ? 'Processando...' : (
+            {loading ? 'Verificando...' : (
               tab === 'LOGIN' ? 'Entrar no Sistema' :
               tab === 'REGISTER' ? 'Finalizar Cadastro' :
-              tab === 'FORGOT' ? 'Enviar Código de Recuperação' :
+              tab === 'FORGOT' ? 'Enviar Código para meu E-mail' :
+              tab === 'VERIFY_CODE' ? 'Validar Código' :
               'Salvar Nova Senha e Entrar'
             )}
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          {(tab === 'FORGOT' || tab === 'RESET') && (
+          {/* BOTÕES DE NAVEGAÇÃO / VOLTAR */}
+          {(tab === 'FORGOT' || tab === 'VERIFY_CODE' || tab === 'NEW_PASSWORD') && (
             <button
               type="button"
-              onClick={() => { setTab('LOGIN'); setError(null); setSuccessMsg(null); }}
+              onClick={() => { setTab('LOGIN'); setError(null); setSuccessMsg(null); setResetCode(''); }}
               className="w-full text-center text-xs text-slate-400 hover:text-slate-200 mt-2 block"
             >
               ← Voltar para o Login

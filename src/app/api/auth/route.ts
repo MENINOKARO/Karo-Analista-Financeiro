@@ -128,7 +128,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. REDEFINIÇÃO DE SENHA COM CÓDIGO
+    // 5. VALIDAR CÓDIGO DE RECUPERAÇÃO (NÃO LIBERA A SENHA SE ESTIVER ERRADO)
+    if (action === 'VERIFY_RESET_CODE') {
+      const { email, code } = payload;
+      if (!email || !code) {
+        return NextResponse.json({ success: false, message: 'E-mail e código de verificação são obrigatórios.' }, { status: 400 });
+      }
+
+      try {
+        KaroDatabase.verifyPasswordResetCode(email, code);
+        return NextResponse.json({
+          success: true,
+          message: 'Código de verificação validado com sucesso! Agora você pode definir sua nova senha.'
+        });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+      }
+    }
+
+    // 6. REDEFINIÇÃO DE SENHA COM CÓDIGO VALIDADO
     if (action === 'RESET_PASSWORD') {
       const { email, code, newPassword } = payload;
       if (!email || !code || !newPassword) {

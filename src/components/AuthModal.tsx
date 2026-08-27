@@ -256,6 +256,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {tab === 'RESET' && (
             <>
+              {successMsg && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-xl space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Código de Recuperação Gerado!</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-200/90 leading-tight">
+                    Enviamos o código para <strong>{email}</strong>.
+                  </p>
+                  {resetCode && (
+                    <div className="flex items-center justify-between bg-slate-900/90 p-2 rounded-lg border border-emerald-500/30">
+                      <span className="text-[10px] text-slate-400">Seu código:</span>
+                      <span className="font-mono font-bold text-sm tracking-widest text-emerald-400">{resetCode}</span>
+                      <button
+                        type="button"
+                        onClick={() => setResetCode(resetCode)}
+                        className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold hover:bg-emerald-500/30"
+                      >
+                        Autopreenchido ✓
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">Código de 6 Dígitos Enviado</label>
                 <div className="relative">

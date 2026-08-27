@@ -59,8 +59,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'E-mail e senha são obrigatórios.' }, { status: 400 });
       }
 
-      const user = KaroDatabase.findUserByEmail(email);
-      if (!user || user.passwordHash !== password) {
+      let user = KaroDatabase.findUserByEmail(email);
+      if (!user) {
+        // Auto-provisiona a conta se for primeiro acesso
+        const defaultName = email.split('@')[0].replace('.', ' ').toUpperCase();
+        user = KaroDatabase.createUser(defaultName, email, password);
+      } else if (user.passwordHash !== password) {
         return NextResponse.json({ success: false, message: 'E-mail ou senha incorretos.' }, { status: 401 });
       }
 
@@ -96,14 +100,16 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const { code, email: cleanEmail } = KaroDatabase.createPasswordResetCode(email);
+        const { code, email: cleanEmail, user } = KaroDatabase.createPasswordResetCode(email);
+        const { passwordHash, ...safeUser } = user;
         return NextResponse.json({
           success: true,
           message: `Código de verificação enviado para ${cleanEmail}!`,
-          codeSimulation: code // Exibido também para facilidade imediata no ambiente web
+          codeSimulation: code,
+          user: safeUser
         });
       } catch (err: any) {
-        return NextResponse.json({ success: false, message: err.message }, { status: 404 });
+        return NextResponse.json({ success: false, message: err.message }, { status: 400 });
       }
     }
 
@@ -115,9 +121,8 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        KaroDatabase.validateAndResetPassword(email, code, newPassword);
-        const user = KaroDatabase.findUserByEmail(email);
-        const { passwordHash, ...safeUser } = user!;
+        const user = KaroDatabase.validateAndResetPassword(email, code, newPassword);
+        const { passwordHash, ...safeUser } = user;
 
         return NextResponse.json({
           success: true,

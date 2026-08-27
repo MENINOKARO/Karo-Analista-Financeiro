@@ -185,6 +185,11 @@ export interface OptionStrategyDetail {
   executionGuide: string;
   leg1: B3OptionContract;
   leg2?: B3OptionContract;
+  targetSellPrice1?: number;
+  targetSellPrice2?: number;
+  targetProfitPercent1?: number;
+  targetProfitPercent2?: number;
+  stopLossPrice?: number;
 }
 
 export interface OptionsTradePlan {

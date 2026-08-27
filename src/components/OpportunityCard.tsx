@@ -358,34 +358,74 @@ export function OpportunityCard({ op, onOpenChart, onOpenCalculator, onFollowSig
                 </div>
               </div>
 
+              {/* PREÇOS SUGERIDOS DE COMPRA E VENDA (ALVOS E STOP) */}
+              <div className="grid grid-cols-4 gap-2 bg-slate-900/90 border border-purple-500/30 p-3 rounded-xl text-center">
+                <div>
+                  <span className="text-[10px] uppercase text-purple-300 font-bold block">Preço Compra</span>
+                  <span className="text-xs font-bold text-white font-mono">
+                    R$ {currentStrategy.costOrIncomePerUnit.toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-slate-400 block">Entrada</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-emerald-400 font-bold block">Venda Alvo 1</span>
+                  <span className="text-xs font-bold text-emerald-400 font-mono">
+                    R$ {(currentStrategy.targetSellPrice1 || currentStrategy.costOrIncomePerUnit * 1.80).toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-emerald-300 block font-semibold">
+                    +{currentStrategy.targetProfitPercent1 || 80}%
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-cyan-400 font-bold block">Venda Alvo 2</span>
+                  <span className="text-xs font-bold text-cyan-400 font-mono">
+                    R$ {(currentStrategy.targetSellPrice2 || currentStrategy.costOrIncomePerUnit * 2.60).toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-cyan-300 block font-semibold">
+                    +{currentStrategy.targetProfitPercent2 || 160}%
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-rose-400 font-bold block">Venda Stop</span>
+                  <span className="text-xs font-bold text-rose-400 font-mono">
+                    R$ {(currentStrategy.stopLossPrice || currentStrategy.costOrIncomePerUnit * 0.48).toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-rose-500 block font-semibold">-52%</span>
+                </div>
+              </div>
+
               {/* VALORES DE COMPRA / VENDA EM REAIS */}
               <div className="bg-[#0b101d] border border-purple-500/30 p-3 rounded-xl space-y-2">
                 <span className="font-bold text-purple-300 block text-[11px]">
-                  💎 Valores Financeiros em Reais para {optContracts} opções:
+                  💎 Valores Financeiros Totais para {optContracts} opções:
                 </span>
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
-                  <div className="bg-slate-900/80 p-2 rounded-lg">
+                  <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
                     <span className="text-[10px] text-slate-400 block">
-                      {currentStrategy.isCredit ? '💰 Crédito Recebido:' : '🛒 Custo Máximo:'}
+                      {currentStrategy.isCredit ? '💰 Crédito Recebido:' : '🛒 Custo Total Compra:'}
                     </span>
                     <span className="font-bold text-white font-mono">
                       R$ {optFinancialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-[9px] text-slate-400 block">
-                      (R$ {currentStrategy.costOrIncomePerUnit.toFixed(2)} / un)
+                      ({optContracts} un x R$ {currentStrategy.costOrIncomePerUnit.toFixed(2)})
                     </span>
                   </div>
                   <div className="bg-slate-900/80 p-2 rounded-lg border border-emerald-500/20">
-                    <span className="text-[10px] text-emerald-400 block">🎯 Lucro Potencial:</span>
+                    <span className="text-[10px] text-emerald-400 block">🎯 Venda no Alvo 1:</span>
                     <span className="font-bold text-emerald-400 font-mono text-[11px]">
-                      {currentStrategy.maxProfitDescription.split('(')[0]}
+                      R$ {((currentStrategy.targetSellPrice1 || currentStrategy.costOrIncomePerUnit * 1.80) * optContracts).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[9px] text-emerald-300 block font-semibold">
+                      Lucro: +R$ {(((currentStrategy.targetSellPrice1 || currentStrategy.costOrIncomePerUnit * 1.80) - currentStrategy.costOrIncomePerUnit) * optContracts).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="bg-slate-900/80 p-2 rounded-lg border border-rose-500/20">
-                    <span className="text-[10px] text-rose-400 block">🛑 Risco Máximo:</span>
+                    <span className="text-[10px] text-rose-400 block">🛑 Perda no Stop:</span>
                     <span className="font-bold text-rose-400 font-mono text-[11px]">
-                      {currentStrategy.maxRiskDescription.split('(')[0]}
+                      -R$ {((currentStrategy.costOrIncomePerUnit - (currentStrategy.stopLossPrice || currentStrategy.costOrIncomePerUnit * 0.48)) * optContracts).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
+                    <span className="text-[9px] text-rose-400 block">Risco 100% limitado</span>
                   </div>
                 </div>
               </div>

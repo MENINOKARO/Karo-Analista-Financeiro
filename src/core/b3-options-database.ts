@@ -259,16 +259,20 @@ export class B3OptionsDatabase {
     // 4. MAGAZINE LUIZA (MGLU3) - Calibração Exata do Book da Clear
     if (clean === 'MGLU') {
       const mgluStrikes = isLongTerm ? [
-        { strike: 4.50, code: `MGLU${seriesLetter}450`, callPremium: 0.48, putPremium: 0.35 },
-        { strike: 4.80, code: `MGLU${seriesLetter}480`, callPremium: 0.28, putPremium: 0.55 },
-        { strike: 5.00, code: `MGLU${seriesLetter}500`, callPremium: 0.18, putPremium: 0.75 }, // Centavos Baixo Risco
-        { strike: 5.50, code: `MGLU${seriesLetter}550`, callPremium: 0.08, putPremium: 1.20 }
+        { strike: 4.70, code: `MGLU${seriesLetter}470`, callPremium: 0.60, putPremium: 0.28 },
+        { strike: 4.80, code: `MGLU${seriesLetter}480`, callPremium: 0.48, putPremium: 0.38 },
+        { strike: 5.00, code: `MGLU${seriesLetter}500`, callPremium: 0.38, putPremium: 0.55 },
+        { strike: 5.20, code: `MGLU${seriesLetter}520`, callPremium: 0.26, putPremium: 0.72 },
+        { strike: 5.40, code: `MGLU${seriesLetter}540`, callPremium: 0.18, putPremium: 0.95 },
+        { strike: 5.60, code: `MGLU${seriesLetter}560`, callPremium: 0.12, putPremium: 1.15 }
       ] : [
-        { strike: 4.00, code: `MGLU${seriesLetter}400`, callPremium: 0.72, putPremium: 0.05 },
-        { strike: 4.20, code: `MGLU${seriesLetter}420`, callPremium: 0.55, putPremium: 0.09 },
-        { strike: 4.50, code: `MGLU${seriesLetter}450`, callPremium: 0.37, putPremium: 0.18 }, // Exato da Clear: R$ 0,37
-        { strike: 4.80, code: `MGLU${seriesLetter}480`, callPremium: 0.13, putPremium: 0.35 }, // Exato da Clear: R$ 0,13
-        { strike: 5.00, code: `MGLU${seriesLetter}500`, callPremium: 0.08, putPremium: 0.50 }
+        { strike: 4.50, code: `MGLU${seriesLetter}450`, callPremium: 0.62, putPremium: 0.08 },
+        { strike: 4.70, code: `MGLU${seriesLetter}470`, callPremium: 0.47, putPremium: 0.15 }, // Exato da Clear: R$ 0,47
+        { strike: 4.80, code: `MGLU${seriesLetter}480`, callPremium: 0.33, putPremium: 0.22 }, // Exato da Clear: R$ 0,33
+        { strike: 5.00, code: `MGLU${seriesLetter}500`, callPremium: 0.25, putPremium: 0.35 }, // Exato da Clear: R$ 0,25 (Compra 0,22 / Venda 0,25)
+        { strike: 5.20, code: `MGLU${seriesLetter}520`, callPremium: 0.16, putPremium: 0.52 }, // Exato da Clear: R$ 0,16
+        { strike: 5.40, code: `MGLU${seriesLetter}540`, callPremium: 0.10, putPremium: 0.70 }, // Exato da Clear: R$ 0,10
+        { strike: 5.60, code: `MGLU${seriesLetter}560`, callPremium: 0.06, putPremium: 0.90 }  // Exato da Clear: R$ 0,06
       ];
 
       return mgluStrikes.map(s => {
@@ -375,7 +379,85 @@ export class B3OptionsDatabase {
       });
     }
 
-    // 7. ITAÚ (ITUB4)
+    // 7. AMBEV (ABEV3) - Calibração Oficial Clear
+    if (clean === 'ABEV') {
+      const abevStrikes = isLongTerm ? [
+        { strike: 14.50, code: `ABEV${seriesLetter}145`, callPremium: 0.95, putPremium: 0.40 },
+        { strike: 15.00, code: `ABEV${seriesLetter}150`, callPremium: 0.65, putPremium: 0.60 },
+        { strike: 15.25, code: `ABEV${seriesLetter}153`, callPremium: 0.48, putPremium: 0.85 },
+        { strike: 15.50, code: `ABEV${seriesLetter}155`, callPremium: 0.35, putPremium: 1.10 },
+        { strike: 16.00, code: `ABEV${seriesLetter}160`, callPremium: 0.20, putPremium: 1.65 }
+      ] : [
+        { strike: 14.50, code: `ABEV${seriesLetter}145`, callPremium: 0.72, putPremium: 0.08 },
+        { strike: 15.00, code: `ABEV${seriesLetter}150`, callPremium: 0.45, putPremium: 0.15 },
+        { strike: 15.25, code: `ABEV${seriesLetter}153`, callPremium: 0.29, putPremium: 0.28 }, // Exato da Clear: R$ 0,29
+        { strike: 15.50, code: `ABEV${seriesLetter}155`, callPremium: 0.21, putPremium: 0.45 }, // Exato da Clear: R$ 0,21
+        { strike: 16.00, code: `ABEV${seriesLetter}160`, callPremium: 0.11, putPremium: 0.90 }  // Exato da Clear: R$ 0,11
+      ];
+
+      return abevStrikes.map(s => {
+        let moneyness: 'ITM' | 'ATM' | 'OTM' = 'ATM';
+        if (optionType === 'CALL') {
+          if (s.strike < currentPrice * 0.988) moneyness = 'ITM';
+          else if (s.strike > currentPrice * 1.012) moneyness = 'OTM';
+        } else {
+          if (s.strike > currentPrice * 1.012) moneyness = 'ITM';
+          else if (s.strike < currentPrice * 0.988) moneyness = 'OTM';
+        }
+
+        return {
+          ticker: s.code,
+          underlyingStock: 'ABEV3',
+          strike: s.strike,
+          optionType,
+          style: 'AMERICANA',
+          moneyness,
+          expirationDate: expInfo.dateString,
+          estimatedPremium: optionType === 'CALL' ? s.callPremium : s.putPremium,
+          volume24h: Math.floor(160000 + Math.random() * 380000)
+        };
+      });
+    }
+
+    // 8. RAIADROGASIL (RADL3) - Calibração Oficial Clear
+    if (clean === 'RADL') {
+      const radlStrikes = isLongTerm ? [
+        { strike: 19.50, code: `RADL${seriesLetter}195`, callPremium: 0.85, putPremium: 0.50 },
+        { strike: 19.75, code: `RADL${seriesLetter}198`, callPremium: 0.68, putPremium: 0.70 },
+        { strike: 20.25, code: `RADL${seriesLetter}203`, callPremium: 0.42, putPremium: 1.10 },
+        { strike: 21.00, code: `RADL${seriesLetter}210`, callPremium: 0.22, putPremium: 1.75 }
+      ] : [
+        { strike: 19.50, code: `RADL${seriesLetter}195`, callPremium: 0.65, putPremium: 0.12 },
+        { strike: 19.75, code: `RADL${seriesLetter}198`, callPremium: 0.48, putPremium: 0.25 }, // Exato da Clear: R$ 0,48
+        { strike: 20.25, code: `RADL${seriesLetter}203`, callPremium: 0.26, putPremium: 0.55 }, // Exato da Clear: R$ 0,26
+        { strike: 21.00, code: `RADL${seriesLetter}210`, callPremium: 0.12, putPremium: 1.15 }
+      ];
+
+      return radlStrikes.map(s => {
+        let moneyness: 'ITM' | 'ATM' | 'OTM' = 'ATM';
+        if (optionType === 'CALL') {
+          if (s.strike < currentPrice * 0.988) moneyness = 'ITM';
+          else if (s.strike > currentPrice * 1.012) moneyness = 'OTM';
+        } else {
+          if (s.strike > currentPrice * 1.012) moneyness = 'ITM';
+          else if (s.strike < currentPrice * 0.988) moneyness = 'OTM';
+        }
+
+        return {
+          ticker: s.code,
+          underlyingStock: 'RADL3',
+          strike: s.strike,
+          optionType,
+          style: 'AMERICANA',
+          moneyness,
+          expirationDate: expInfo.dateString,
+          estimatedPremium: optionType === 'CALL' ? s.callPremium : s.putPremium,
+          volume24h: Math.floor(95000 + Math.random() * 210000)
+        };
+      });
+    }
+
+    // 9. ITAÚ (ITUB4)
     if (clean === 'ITUB') {
       const itubStrikes = [
         { strike: 37.50, code: `ITUB${seriesLetter}375`, callPremium: 1.60, putPremium: 0.12 },

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { KaroDatabase } from '@/core/database/db';
+import { EmailService } from '@/core/notifications/email-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,9 +118,19 @@ export async function POST(req: NextRequest) {
       try {
         const { code, email: cleanEmail, user } = KaroDatabase.createPasswordResetCode(email);
         const { passwordHash, ...safeUser } = user;
+
+        // Dispara o envio do e-mail real (via Resend ou SMTP/Gmail)
+        const emailResult = await EmailService.sendPasswordResetEmail({
+          toEmail: cleanEmail,
+          userName: user.name,
+          resetCode: code
+        });
+
         return NextResponse.json({
           success: true,
           message: `Código de verificação enviado para ${cleanEmail}!`,
+          emailSent: emailResult.success,
+          emailProvider: emailResult.provider,
           codeSimulation: code,
           user: safeUser
         });

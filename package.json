@@ -9,27 +9,29 @@
     "scanner": "tsx src/server/scanner-standalone.ts"
   },
   "dependencies": {
+    "axios": "^1.7.4",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.428.0",
     "next": "14.2.5",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^9.0.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.428.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.2",
-    "yahoo-finance2": "^2.11.3",
-    "axios": "^1.7.4",
-    "node-cron": "^3.0.3",
     "recharts": "^2.12.7",
-    "date-fns": "^3.6.0"
+    "tailwind-merge": "^2.5.2",
+    "yahoo-finance2": "^2.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.14.12",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@types/node-cron": "^3.0.11",
-    "typescript": "^5.5.4",
-    "tailwindcss": "^3.4.9",
-    "postcss": "^8.4.41",
     "autoprefixer": "^10.4.20",
-    "tsx": "^4.19.0"
+    "postcss": "^8.4.41",
+    "tailwindcss": "^3.4.9",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
   }
 }

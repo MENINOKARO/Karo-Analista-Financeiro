@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Candle } from './types';
+import { B3OptionsDatabase } from './b3-options-database';
 
 export interface TickerInfo {
   symbol: string;
@@ -294,7 +295,28 @@ export class MarketFeedService {
   }
 
   public static async getLiveQuote(symbol: string): Promise<{ price: number; changePercent: number; name: string } | null> {
+    const clean = symbol.trim().toUpperCase().replace(/\.SA$/, '');
     const info = resolveTickerInfo(symbol);
+
+    // 1. Para opções B3, consulta prioritariamente a base calibrada da B3 (B3OptionsDatabase), idêntica ao Radar
+    if (info.isOption) {
+      try {
+        const root = clean.slice(0, 4);
+        const defaultSuffix = ['PETR', 'ITUB', 'BBDC', 'GGBR', 'CMIG', 'CPLE', 'AZUL', 'POMO', 'RAIZ'].includes(root) ? '4.SA' : '3.SA';
+        const underlying = info.underlyingTicker || `${root}${defaultSuffix}`;
+        const chain = B3OptionsDatabase.generateOptionChain(underlying, 0, info.optionType || 'CALL');
+        const contract = chain.find(c => c.ticker === clean);
+
+        if (contract && contract.estimatedPremium > 0) {
+          return {
+            price: contract.estimatedPremium,
+            changePercent: 0,
+            name: info.name
+          };
+        }
+      } catch (e) {}
+    }
+
     const targetSymbol = info.underlyingTicker || (symbol.endsWith('.SA') ? symbol : `${symbol}.SA`);
 
     try {
@@ -431,7 +453,7 @@ export function resolveTickerInfo(rawInput: string): ResolvedTicker {
     };
   }
 
-  // 2. Opções B3 (Ex: ABEVI153, PETRK380, VALEJ600, BBDCA150, BBASC350)
+  // 2. Opções B3 (Ex: MGLUI500, ABEVI153, PETRK380, VALEJ600, BBDCA150, BBASC350)
   const optionMatch = clean.match(/^([A-Z]{4})([A-X])(\d+)$/);
   if (optionMatch) {
     const root = optionMatch[1];
@@ -441,11 +463,26 @@ export function resolveTickerInfo(rawInput: string): ResolvedTicker {
     // Letras A-L = CALL, M-X = PUT
     const isCall = monthLetter >= 'A' && monthLetter <= 'L';
     const companyBase = ROOT_NAMES[root] || root;
-    
-    // Interpreta o Strike numérico
-    const strikeNum = Number(strikeRaw) >= 100 ? Number(strikeRaw) / 10 : Number(strikeRaw);
     const defaultSuffix = ['PETR', 'ITUB', 'BBDC', 'GGBR', 'CMIG', 'CPLE', 'AZUL', 'POMO', 'RAIZ'].includes(root) ? '4.SA' : '3.SA';
     const underlyingTicker = `${root}${defaultSuffix}`;
+
+    // Busca contrato correspondente na base de opções da B3 para Strike e Cotação exatos
+    let strikeNum: number | undefined;
+    try {
+      const chain = B3OptionsDatabase.generateOptionChain(underlyingTicker, 0, isCall ? 'CALL' : 'PUT');
+      const contract = chain.find(c => c.ticker === clean);
+      if (contract) strikeNum = contract.strike;
+    } catch (e) {}
+
+    if (strikeNum === undefined) {
+      if (['MGLU', 'COGN', 'CVCB', 'CASH', 'OIBR', 'BHIA', 'LWSA'].includes(root) && Number(strikeRaw) >= 100) {
+        strikeNum = Number(strikeRaw) / 100;
+      } else if (Number(strikeRaw) >= 100) {
+        strikeNum = Number(strikeRaw) / 10;
+      } else {
+        strikeNum = Number(strikeRaw);
+      }
+    }
 
     return {
       cleanTicker: clean,

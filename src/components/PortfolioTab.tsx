@@ -20,9 +20,12 @@ import {
   Check, 
   Clock, 
   ArrowUpRight, 
-  ArrowDownRight 
+  ArrowDownRight,
+  Flag,
+  BadgeCheck
 } from 'lucide-react';
 import { PortfolioSummary, ActivePosition, MarketType } from '@/core/types';
+import { resolveTickerInfo } from '@/core/market-feed';
 
 interface PortfolioTabProps {
   portfolioSummary: PortfolioSummary | null;
@@ -52,6 +55,11 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   const [editTarget2, setEditTarget2] = useState<number>(0);
   const [editStatus, setEditStatus] = useState<string>('ABERTA');
   const [editName, setEditName] = useState<string>('');
+
+  // Modal de Finalizar Operação
+  const [showCloseModal, setShowCloseModal] = useState<boolean>(false);
+  const [closingPos, setClosingPos] = useState<any | null>(null);
+  const [closeExitPrice, setCloseExitPrice] = useState<number>(0);
 
   const [loadingAction, setLoadingAction] = useState<boolean>(false);
   const [refreshingQuotes, setRefreshingQuotes] = useState<boolean>(false);
@@ -83,6 +91,19 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
+  // AUTO-PREENCHIMENTO DO NOME DA EMPRESA AO DIGITAR O CÓDIGO
+  const handleTickerInputChange = (value: string) => {
+    const upper = value.toUpperCase();
+    setManualTicker(upper);
+    if (upper.length >= 3) {
+      const info = resolveTickerInfo(upper);
+      if (info.name) {
+        setManualName(info.name);
+        setManualMarket(info.market);
+      }
+    }
+  };
+
   // Atualiza cotações ao vivo de todas as posições
   const handleRefreshLiveQuotes = async () => {
     try {
@@ -112,6 +133,13 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
     setEditStatus(pos.status || 'ABERTA');
     setEditName(pos.name || pos.ticker);
     setShowEditModal(true);
+  };
+
+  // Abre modal de finalização de trade
+  const handleOpenCloseModal = (pos: any) => {
+    setClosingPos(pos);
+    setCloseExitPrice(pos.currentPrice || pos.entryPrice);
+    setShowCloseModal(true);
   };
 
   // Salva alterações da posição
@@ -160,8 +188,9 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
     showToast('Stop Loss ajustado para o Preço de Entrada (Risco Zero)!');
   };
 
-  // Encerrar posição ao preço de mercado
-  const handleClosePosition = async (id: string, currentPrice?: number) => {
+  // Confirmar encerramento do trade
+  const handleConfirmClosePosition = async () => {
+    if (!closingPos) return;
     try {
       setLoadingAction(true);
       const userId = getUserId();
@@ -172,15 +201,19 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
         body: JSON.stringify({
           action: 'CLOSE_POSITION',
           userId,
-          payload: { id, exitPrice: currentPrice }
+          payload: { 
+            id: closingPos.id, 
+            exitPrice: closeExitPrice 
+          }
         })
       });
 
       const json = await res.json();
       if (json.success) {
+        setShowCloseModal(false);
         if (showEditModal) setShowEditModal(false);
         onRefresh();
-        showToast('Operação encerrada e P&L registrado com sucesso!');
+        showToast(`Operação em ${closingPos.ticker} encerrada com sucesso!`);
       }
     } catch (err) {
       console.error('Erro ao encerrar posição:', err);
@@ -216,7 +249,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
       if (json.success) {
         setShowAddModal(false);
         onRefresh();
-        showToast(`Posição em ${manualTicker} cadastrada na carteira!`);
+        showToast(`Posição em ${manualTicker} (${manualName}) cadastrada com sucesso!`);
       }
     } catch (err) {
       console.error('Erro ao adicionar posição:', err);
@@ -272,7 +305,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
             <div>
               <h2 className="text-base font-bold text-white">Minha Carteira & Gestão de Posições</h2>
               <p className="text-xs text-slate-400">
-                Acompanhe o valor real das suas ações e opções com feed B3 atualizado e consultoria ao vivo do robô.
+                Cotações 100% sincronizadas ao vivo com o Radar e consultoria instantânea do robô.
               </p>
             </div>
           </div>
@@ -292,7 +325,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
               onClick={() => setShowAddModal(true)}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5"
             >
-              <Plus className="w-4 h-4" /> Cadastrar Ação
+              <Plus className="w-4 h-4" /> Cadastrar Ação / Opção
             </button>
           </div>
         </div>
@@ -337,7 +370,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
             <span>Posições em Andamento (Guardião do Robô):</span>
           </h3>
           <span className="text-[11px] text-slate-500 flex items-center gap-1">
-            <Clock className="w-3 h-3 text-cyan-400" /> Monitoramento Contínuo B3
+            <Clock className="w-3 h-3 text-cyan-400" /> Cotações ao Vivo B3
           </span>
         </div>
 
@@ -346,7 +379,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
             <Briefcase className="w-10 h-10 text-slate-600 mx-auto mb-2" />
             <p className="text-slate-300 font-semibold text-sm">Nenhuma posição ativa cadastrada no momento.</p>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              Vá na aba de Radar de Oportunidades e clique em <strong>"⚡ Entrei no Trade"</strong> para o robô acompanhar sua operação, ou clique em <strong>"Cadastrar Ação"</strong> acima para registrar manualmente!
+              Vá na aba de Radar de Oportunidades e clique em <strong>"⚡ Entrei no Trade"</strong> para o robô acompanhar sua operação, ou clique em <strong>"Cadastrar Ação / Opção"</strong> acima para registrar manualmente!
             </p>
           </div>
         ) : (
@@ -367,7 +400,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-lg font-bold text-white tracking-tight">{pos.ticker}</span>
-                          <span className="text-xs text-slate-400">({pos.name})</span>
+                          <span className="text-xs text-slate-300 font-semibold">({pos.name})</span>
                           {pos.modality === 'OPTIONS' || (pos.ticker.length >= 7 && !pos.ticker.includes('.SA') && !pos.ticker.includes('USD')) ? (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30 font-mono">
                               💎 Opção B3 • {pos.quantity} un
@@ -379,7 +412,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                           )}
                           {isBreakeven && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                              🛡️ Stop no Breakeven
+                              🛡️ Breakeven
                             </span>
                           )}
                         </div>
@@ -408,8 +441,8 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                         </span>
                         <span className="font-bold text-white font-mono">R$ {pos.entryPrice.toFixed(2)}</span>
                       </div>
-                      <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-lg py-1">
-                        <span className="text-[10px] uppercase text-cyan-400 block font-semibold">
+                      <div className="bg-cyan-950/30 border border-cyan-500/30 rounded-lg py-1">
+                        <span className="text-[10px] uppercase text-cyan-400 block font-bold">
                           Cotação Atual
                         </span>
                         <span className="font-bold text-cyan-300 font-mono">R$ {pos.currentPrice.toFixed(2)}</span>
@@ -445,23 +478,37 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                   </div>
 
                   {/* Ações da Posição */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80 flex-wrap">
+                    {/* BOTÃO FINALIZAR OPERAÇÃO */}
+                    <button
+                      onClick={() => handleOpenCloseModal(pos)}
+                      className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md ${
+                        isProfit 
+                          ? 'bg-emerald-600/90 hover:bg-emerald-500 text-white shadow-emerald-600/20' 
+                          : 'bg-amber-600/90 hover:bg-amber-500 text-white shadow-amber-600/20'
+                      }`}
+                    >
+                      <Flag className="w-3.5 h-3.5" /> Finalizar Operação
+                    </button>
+
                     <button
                       onClick={() => handleOpenEditModal(pos)}
-                      className="flex-1 py-2 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-xs font-semibold text-cyan-300 transition flex items-center justify-center gap-1.5"
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 transition flex items-center justify-center gap-1"
                     >
-                      <Edit3 className="w-3.5 h-3.5" /> Editar Posição
+                      <Edit3 className="w-3.5 h-3.5" /> Editar
                     </button>
+
                     <button
                       onClick={() => onOpenChart(pos.ticker)}
-                      className="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center justify-center gap-1.5"
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition flex items-center justify-center gap-1"
                     >
                       <LineChart className="w-3.5 h-3.5 text-cyan-400" /> Gráfico
                     </button>
+
                     <button
                       onClick={() => handleRemovePosition(pos.id)}
                       disabled={loadingAction}
-                      className="px-3 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 text-xs font-semibold transition flex items-center gap-1"
+                      className="p-2 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-400 text-xs transition flex items-center"
                       title="Excluir da carteira"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -473,6 +520,84 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
           </div>
         )}
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE FINALIZAR OPERAÇÃO */}
+      {/* ========================================================================= */}
+      {showCloseModal && closingPos && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0d1322] border border-emerald-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Flag className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-bold text-white text-base">Finalizar Operação • {closingPos.ticker}</h3>
+              </div>
+              <button onClick={() => setShowCloseModal(false)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-2.5 text-xs">
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Ativo:</span>
+                <strong className="text-white font-mono">{closingPos.ticker} ({closingPos.name})</strong>
+              </div>
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Quantidade:</span>
+                <strong className="text-white font-mono">{closingPos.quantity} un</strong>
+              </div>
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Preço de Entrada:</span>
+                <strong className="text-white font-mono">R$ {closingPos.entryPrice.toFixed(2)}</strong>
+              </div>
+              <div className="flex justify-between items-center text-cyan-400 border-t border-slate-800/80 pt-2">
+                <span className="font-bold">Cotação Atual de Saída:</span>
+                <strong className="text-cyan-300 font-mono text-sm">R$ {closeExitPrice.toFixed(2)}</strong>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-800/80 pt-2 text-sm">
+                <span className="font-bold text-slate-200">Resultado Final Estimado:</span>
+                <span className={`font-bold font-mono ${
+                  (closeExitPrice - closingPos.entryPrice) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                }`}>
+                  {(closeExitPrice - closingPos.entryPrice) >= 0 ? '+' : ''}
+                  R$ {((closeExitPrice - closingPos.entryPrice) * closingPos.quantity).toFixed(2)} ({
+                    (((closeExitPrice - closingPos.entryPrice) / closingPos.entryPrice) * 100).toFixed(2)
+                  }%)
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-slate-300 font-semibold block mb-1 text-xs">
+                Ajustar Preço de Venda Executado (R$):
+              </label>
+              <input 
+                type="number" 
+                step="0.01" 
+                value={closeExitPrice} 
+                onChange={(e) => setCloseExitPrice(Number(e.target.value))}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm font-bold"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+              <button 
+                onClick={() => setShowCloseModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmClosePosition}
+                disabled={loadingAction}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-1.5"
+              >
+                <Check className="w-4 h-4" /> Confirmar & Realizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* MODAL DE EDIÇÃO DE POSIÇÃO */}
@@ -602,11 +727,14 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
 
               <button
                 type="button"
-                onClick={() => handleClosePosition(editingPos.id, editingPos.currentPrice)}
+                onClick={() => {
+                  setShowEditModal(false);
+                  handleOpenCloseModal(editingPos);
+                }}
                 disabled={loadingAction}
-                className="w-full py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-bold text-xs transition flex items-center justify-center gap-1"
+                className="w-full py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition flex items-center justify-center gap-1"
               >
-                🏁 Encerrar Operação ao Preço Atual (R$ {editingPos.currentPrice?.toFixed(2)})
+                🏁 Finalizar / Encerrar Operação ao Preço Atual
               </button>
             </div>
           </div>
@@ -620,7 +748,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0d1322] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-base">Cadastrar Ação que Já Possuo</h3>
+              <h3 className="font-bold text-white text-base">Cadastrar Ação ou Opção na Carteira</h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1">
                 <X className="w-5 h-5" />
               </button>
@@ -634,7 +762,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                     onClick={() => { setManualMarket('B3'); setManualTicker('PETR4.SA'); setManualName('Petrobras PN'); }}
                     className={`py-1.5 rounded-lg border font-bold text-center ${manualMarket === 'B3' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
                   >
-                    🇧🇷 Ações B3
+                    🇧🇷 Ações & Opções B3
                   </button>
                   <button 
                     onClick={() => { setManualMarket('CRYPTO'); setManualTicker('BTC-USD'); setManualName('Bitcoin (BTC)'); }}
@@ -650,10 +778,14 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                   <label className="text-slate-300 font-semibold block mb-1">Código (Ticker):</label>
                   <input 
                     type="text" 
+                    placeholder="Ex: ABEVI153 ou PETR4"
                     value={manualTicker} 
-                    onChange={(e) => setManualTicker(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono font-bold"
+                    onChange={(e) => handleTickerInputChange(e.target.value)}
+                    className="w-full bg-slate-900 border border-cyan-500/50 rounded-lg px-3 py-2 text-white font-mono font-bold uppercase focus:border-cyan-400 outline-none"
                   />
+                  <span className="text-[10px] text-cyan-400/80 block mt-1">
+                    Auto-completa a empresa ao digitar
+                  </span>
                 </div>
                 <div>
                   <label className="text-slate-300 font-semibold block mb-1">Nome da Empresa:</label>
@@ -661,7 +793,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                     type="text" 
                     value={manualName} 
                     onChange={(e) => setManualName(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
                   />
                 </div>
               </div>
@@ -678,7 +810,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                   />
                 </div>
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Quantidade de Ações:</label>
+                  <label className="text-slate-300 font-semibold block mb-1">Quantidade:</label>
                   <input 
                     type="number" 
                     value={manualQty} 

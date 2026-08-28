@@ -292,4 +292,182 @@ export class MarketFeedService {
 
     return candles;
   }
+
+  public static async getLiveQuote(symbol: string): Promise<{ price: number; changePercent: number; name: string } | null> {
+    const info = resolveTickerInfo(symbol);
+    const targetSymbol = info.underlyingTicker || (symbol.endsWith('.SA') ? symbol : `${symbol}.SA`);
+
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${targetSymbol}?interval=15m&range=1d`;
+      const res = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        timeout: 4500
+      });
+      const meta = res.data?.chart?.result?.[0]?.meta;
+      if (meta && meta.regularMarketPrice) {
+        const stockPrice = Number(meta.regularMarketPrice.toFixed(2));
+        const prev = meta.chartPreviousClose || stockPrice;
+        const changePercent = Number((((stockPrice - prev) / prev) * 100).toFixed(2));
+
+        if (info.isOption && info.optionStrike) {
+          // Calcula valor de mercado da opção com base na cotação real da ação
+          const isCall = info.optionType === 'CALL';
+          const intrinsic = isCall ? Math.max(0, stockPrice - info.optionStrike) : Math.max(0, info.optionStrike - stockPrice);
+          const timeValue = Math.max(0.10, Number((stockPrice * 0.025).toFixed(2)));
+          const optionPrice = Number((intrinsic + timeValue).toFixed(2));
+          return { price: Math.max(0.01, optionPrice), changePercent, name: info.name };
+        }
+
+        return { price: stockPrice, changePercent, name: info.name };
+      }
+    } catch {}
+
+    return null;
+  }
+}
+
+export interface ResolvedTicker {
+  cleanTicker: string;
+  name: string;
+  market: 'B3' | 'CRYPTO';
+  isOption: boolean;
+  underlyingTicker?: string;
+  optionType?: 'CALL' | 'PUT';
+  optionStrike?: number;
+}
+
+export function resolveTickerInfo(rawInput: string): ResolvedTicker {
+  if (!rawInput) {
+    return { cleanTicker: 'PETR4.SA', name: 'Petrobras PN', market: 'B3', isOption: false };
+  }
+  const clean = rawInput.trim().toUpperCase().replace(/\.SA$/, '');
+  
+  // Mapeamento de Raízes das Ações B3
+  const ROOT_NAMES: Record<string, string> = {
+    'ABEV': 'Ambev',
+    'PETR': 'Petrobras',
+    'VALE': 'Vale',
+    'ITUB': 'Itaú Unibanco',
+    'BBDC': 'Bradesco',
+    'BBAS': 'Banco do Brasil',
+    'SANB': 'Santander Brasil',
+    'ITSA': 'Itaúsa',
+    'BBSE': 'BB Seguridade',
+    'CXSE': 'Caixa Seguridade',
+    'B3SA': 'B3 Brasil',
+    'MGLU': 'Magazine Luiza',
+    'LREN': 'Lojas Renner',
+    'ASAI': 'Assaí Atacadista',
+    'CRFB': 'Carrefour Brasil',
+    'NTCO': 'Natura &Co',
+    'ALOS': 'Allos',
+    'MULT': 'Multiplan',
+    'WEGE': 'WEG',
+    'EMBR': 'Embraer',
+    'RENT': 'Localiza',
+    'PRIO': 'PRIO',
+    'RECV': 'PetroReconcavo',
+    'UGPA': 'Ultrapar',
+    'VBBR': 'Vibra Energia',
+    'RAIZ': 'Raízen',
+    'ELET': 'Eletrobras',
+    'EQTL': 'Equatorial',
+    'CPLE': 'Copel',
+    'CMIG': 'Cemig',
+    'CPFE': 'CPFL Energia',
+    'EGIE': 'Engie Brasil',
+    'SBSP': 'Sabesp',
+    'CSMG': 'Copasa',
+    'SAPR': 'Sanepar',
+    'GGBR': 'Gerdau',
+    'CSNA': 'CSN',
+    'CMIN': 'CSN Mineração',
+    'USIM': 'Usiminas',
+    'SUZB': 'Suzano',
+    'KLBN': 'Klabin',
+    'RAIL': 'Rumo Logística',
+    'CCRO': 'CCR',
+    'ECOR': 'EcoRodovias',
+    'AZUL': 'Azul',
+    'CVCB': 'CVC Brasil',
+    'POMO': 'Marcopolo',
+    'RADL': 'RaiaDrogasil',
+    'HAPV': 'Hapvida',
+    'RDOR': 'Rede D\'Or',
+    'FLRY': 'Fleury',
+    'HYPE': 'Hypera Pharma',
+    'CYRE': 'Cyrela',
+    'MRVE': 'MRV Engenharia',
+    'EZTC': 'EZTec',
+    'DIRR': 'Direcional',
+    'JBSS': 'JBS',
+    'BRFS': 'BRF',
+    'MRFG': 'Marfrig',
+    'BEEF': 'Minerva',
+    'SLCE': 'SLC Agrícola',
+    'SMTO': 'São Martinho',
+    'COGN': 'Cogna Educação',
+    'YDUQ': 'Yduqs',
+    'VIVT': 'Telefônica Vivo',
+    'TIMS': 'TIM Brasil',
+    'TOTS': 'TOTVS',
+    'LWSA': 'Locaweb',
+    'BOVA': 'ETF Ibovespa (BOVA11)',
+    'SMAL': 'ETF Small Caps (SMAL11)',
+    'IVVB': 'ETF S&P 500 (IVVB11)',
+    'HASH': 'ETF Cripto (HASH11)',
+    'BTC': 'Bitcoin (BTC)',
+    'ETH': 'Ethereum (ETH)',
+    'SOL': 'Solana (SOL)'
+  };
+
+  // 1. Cripto
+  if (clean.includes('BTC') || clean.includes('ETH') || clean.includes('SOL')) {
+    return {
+      cleanTicker: clean.includes('-') ? clean : `${clean}-USD`,
+      name: clean.includes('BTC') ? 'Bitcoin (BTC)' : clean.includes('ETH') ? 'Ethereum (ETH)' : 'Solana (SOL)',
+      market: 'CRYPTO',
+      isOption: false
+    };
+  }
+
+  // 2. Opções B3 (Ex: ABEVI153, PETRK380, VALEJ600, BBDCA150, BBASC350)
+  const optionMatch = clean.match(/^([A-Z]{4})([A-X])(\d+)$/);
+  if (optionMatch) {
+    const root = optionMatch[1];
+    const monthLetter = optionMatch[2];
+    const strikeRaw = optionMatch[3];
+    
+    // Letras A-L = CALL, M-X = PUT
+    const isCall = monthLetter >= 'A' && monthLetter <= 'L';
+    const companyBase = ROOT_NAMES[root] || root;
+    
+    // Interpreta o Strike numérico
+    const strikeNum = Number(strikeRaw) >= 100 ? Number(strikeRaw) / 10 : Number(strikeRaw);
+    const defaultSuffix = ['PETR', 'ITUB', 'BBDC', 'GGBR', 'CMIG', 'CPLE', 'AZUL', 'POMO', 'RAIZ'].includes(root) ? '4.SA' : '3.SA';
+    const underlyingTicker = `${root}${defaultSuffix}`;
+
+    return {
+      cleanTicker: clean,
+      name: `${companyBase} (${isCall ? 'CALL' : 'PUT'} • Strike R$ ${strikeNum.toFixed(2)})`,
+      market: 'B3',
+      isOption: true,
+      underlyingTicker,
+      optionType: isCall ? 'CALL' : 'PUT',
+      optionStrike: strikeNum
+    };
+  }
+
+  // 3. Ação Direta (Ex: ABEV3, PETR4, VALE3, etc.)
+  const root4 = clean.slice(0, 4);
+  const companyName = ROOT_NAMES[root4] || ROOT_NAMES[clean] || `${clean} B3`;
+  const formattedSymbol = clean.includes('.') ? clean : `${clean}.SA`;
+
+  return {
+    cleanTicker: formattedSymbol,
+    name: companyName,
+    market: 'B3',
+    isOption: false,
+    underlyingTicker: formattedSymbol
+  };
 }

@@ -17,30 +17,17 @@ export async function GET(req: NextRequest) {
       await Promise.all(
         positions.map(async (pos) => {
           try {
-            // Se for opção ou ação brasileira
-            const cleanTicker = pos.ticker.replace(/\.SA$/, '');
-            const isOption = pos.modality === 'OPTIONS' || /^[A-Z]{4}[A-X]\d+/.test(cleanTicker);
-            
-            if (isOption) {
-              // Para opções, busca a cotação da ação subjacente para recalcular valor estimado
-              const underlying = cleanTicker.slice(0, 4) + '4.SA';
-              const candles = await MarketFeedService.getCandles(underlying, '15m', 5);
-              if (candles && candles.length > 0) {
-                const stockPrice = candles[candles.length - 1].close;
-                // Variação percentual estimada da opção baseada no delta da ação
-                const baseStockRef = pos.optionStrike || stockPrice;
-                const priceDiff = (stockPrice - baseStockRef) / baseStockRef;
-                const estimatedOptionPrice = Math.max(0.01, Number((pos.entryPrice * (1 + priceDiff * 3)).toFixed(2)));
-                quotesMap[pos.ticker] = estimatedOptionPrice;
-              }
+            const quote = await MarketFeedService.getLiveQuote(pos.ticker);
+            if (quote && quote.price > 0) {
+              quotesMap[pos.ticker] = quote.price;
+              quotesMap[pos.ticker.replace(/\.SA$/, '')] = quote.price;
             } else {
+              // Fallback com candles
               const symbol = pos.ticker.includes('.') ? pos.ticker : `${pos.ticker}.SA`;
               const candles = await MarketFeedService.getCandles(symbol, '15m', 5);
               if (candles && candles.length > 0) {
                 const lastClose = candles[candles.length - 1].close;
                 quotesMap[pos.ticker] = lastClose;
-                quotesMap[symbol] = lastClose;
-                quotesMap[cleanTicker] = lastClose;
               }
             }
           } catch (e) {

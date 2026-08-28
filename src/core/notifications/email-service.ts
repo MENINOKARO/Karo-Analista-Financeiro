@@ -37,27 +37,33 @@ export class EmailService {
     `;
 
     // 1. Envio via Resend API
-    if (process.env.RESEND_API_KEY) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (resendApiKey) {
       try {
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`
+            'Authorization': `Bearer ${resendApiKey}`
           },
           body: JSON.stringify({
             from: process.env.EMAIL_FROM || 'Karo Analista <onboarding@resend.dev>',
             to: [cleanEmail],
-            subject: `Seu Código de Recuperação: ${resetCode} - Karo Analista`,
+            subject: `Seu Código de Recuperação: ${resetCode} - Karo Analista Financeiro`,
             html: htmlContent
           })
         });
-        if (res.ok) {
-          console.log('[EmailService] E-mail enviado via Resend para', cleanEmail);
+
+        const resData = await res.json().catch(() => ({}));
+
+        if (res.ok && resData.id) {
+          console.log(`[EmailService] E-mail enviado com sucesso via Resend para ${cleanEmail} (ID: ${resData.id})`);
           return { success: true, provider: 'RESEND' };
+        } else {
+          console.warn('[EmailService] Resposta Resend:', resData);
         }
       } catch (err: any) {
-        console.error('[EmailService] Falha Resend:', err.message);
+        console.error('[EmailService] Falha no disparo via Resend:', err.message);
       }
     }
 

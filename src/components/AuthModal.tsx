@@ -23,7 +23,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -144,9 +143,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       // 3. ETAPA 1 DE RECUPERAÇÃO: SOLICITAR CÓDIGO POR E-MAIL
       else if (tab === 'FORGOT') {
-        const localUsers = getLocalUsers();
-        const userExists = localUsers.some((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
-
         const res = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -154,14 +150,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         });
 
         const data = await res.json();
-        if ((!res.ok || !data.success) && !userExists) {
-          throw new Error('Não encontramos nenhuma conta com este e-mail. Por favor, crie seu cadastro.');
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Não encontramos nenhuma conta com este e-mail. Por favor, crie seu cadastro.');
         }
 
-        const generatedCode = data.codeSimulation || Math.floor(100000 + Math.random() * 900000).toString();
-        setSimulatedCode(generatedCode);
         setResetCode('');
-        setSuccessMsg(`Código de verificação de 6 dígitos enviado para ${cleanEmail}!`);
+        setSuccessMsg(data.message || `Código de verificação enviado para ${cleanEmail}!`);
         setTab('VERIFY_CODE');
       }
 
@@ -181,14 +175,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         });
 
         const data = await res.json();
-
-        // Se o servidor rejeitou ou se o código não confere com o código gerado
         if (!res.ok || !data.success) {
-          if (simulatedCode && resetCode.trim() === simulatedCode) {
-            // Sucesso validado
-          } else {
-            throw new Error(data.message || 'Código de verificação incorreto. Verifique seu e-mail e tente novamente.');
-          }
+          throw new Error(data.message || 'Código de verificação incorreto. Verifique seu e-mail e tente novamente.');
         }
 
         // Código correto -> Avança para a etapa 3 (abrir campos de nova senha)
@@ -403,21 +391,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* ETAPA 2: VALIDAR CÓDIGO DE 6 DÍGITOS */}
           {tab === 'VERIFY_CODE' && (
             <div className="space-y-3">
-              {simulatedCode && (
-                <div className="bg-slate-900/90 border border-cyan-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Código enviado para o e-mail:</span>
-                    <span className="font-mono font-bold text-cyan-400 tracking-widest">{simulatedCode}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setResetCode(simulatedCode)}
-                    className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded font-bold hover:bg-cyan-500/30"
-                  >
-                    Inserir Código
-                  </button>
-                </div>
-              )}
+              <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl text-center">
+                <p className="text-[11px] text-slate-300">
+                  Enviamos um código de segurança para <strong className="text-cyan-400">{email}</strong>.
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Verifique sua caixa de entrada (e pasta de spam) e digite o código abaixo.
+                </p>
+              </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">

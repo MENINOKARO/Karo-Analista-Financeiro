@@ -126,12 +126,23 @@ export async function POST(req: NextRequest) {
           resetCode: code
         });
 
+        if (!emailResult.success) {
+          let errorMsg = emailResult.error || 'Erro ao enviar o e-mail de recuperação.';
+          if (errorMsg.includes('You can only send testing emails')) {
+            errorMsg = `A conta de teste do Resend só permite envio para o e-mail titular do Resend (icarosotero@gmail.com). Para enviar para ${cleanEmail}, cadastre seu domínio no Resend ou utilize SMTP do Gmail.`;
+          }
+          return NextResponse.json({
+            success: false,
+            message: errorMsg,
+            emailSent: false
+          }, { status: 400 });
+        }
+
         return NextResponse.json({
           success: true,
-          message: `Código de verificação enviado para ${cleanEmail}!`,
-          emailSent: emailResult.success,
+          message: `Código de verificação de 6 dígitos enviado com sucesso para ${cleanEmail}!`,
+          emailSent: true,
           emailProvider: emailResult.provider,
-          codeSimulation: code,
           user: safeUser
         });
       } catch (err: any) {

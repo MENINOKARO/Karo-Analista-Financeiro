@@ -61,9 +61,15 @@ export class EmailService {
           return { success: true, provider: 'RESEND' };
         } else {
           console.warn('[EmailService] Resposta Resend:', resData);
+          return { 
+            success: false, 
+            provider: 'RESEND', 
+            error: resData.message || 'Erro ao enviar e-mail via Resend.' 
+          };
         }
       } catch (err: any) {
         console.error('[EmailService] Falha no disparo via Resend:', err.message);
+        return { success: false, provider: 'RESEND', error: err.message };
       }
     }
 

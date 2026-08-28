@@ -39,7 +39,7 @@ export class EmailService {
     // 1. Envio via Resend API
     const resendApiKey = process.env.RESEND_API_KEY;
     if (resendApiKey) {
-      try {
+      const sendViaResend = async (fromAddress: string) => {
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -47,24 +47,39 @@ export class EmailService {
             'Authorization': `Bearer ${resendApiKey}`
           },
           body: JSON.stringify({
-            from: process.env.EMAIL_FROM || 'Karo Analista <onboarding@resend.dev>',
+            from: fromAddress,
             to: [cleanEmail],
             subject: `Seu Código de Recuperação: ${resetCode} - Karo Analista Financeiro`,
             html: htmlContent
           })
         });
-
         const resData = await res.json().catch(() => ({}));
+        return { ok: res.ok, resData };
+      };
 
-        if (res.ok && resData.id) {
-          console.log(`[EmailService] E-mail enviado com sucesso via Resend para ${cleanEmail} (ID: ${resData.id})`);
+      try {
+        // Tenta primeiro com o remetente oficial do domínio karo.com
+        const defaultFrom = process.env.EMAIL_FROM || 'Karo Analista <nao-responda@karo.com>';
+        let attempt = await sendViaResend(defaultFrom);
+
+        // Se o domínio ainda estiver em propagação/pendente, tenta o onboarding@resend.dev
+        if (!attempt.ok && defaultFrom !== 'Karo Analista <onboarding@resend.dev>') {
+          console.warn('[EmailService] Tentando fallback para onboarding@resend.dev...');
+          const fallbackAttempt = await sendViaResend('Karo Analista <onboarding@resend.dev>');
+          if (fallbackAttempt.ok) {
+            attempt = fallbackAttempt;
+          }
+        }
+
+        if (attempt.ok && attempt.resData.id) {
+          console.log(`[EmailService] E-mail enviado com sucesso via Resend para ${cleanEmail} (ID: ${attempt.resData.id})`);
           return { success: true, provider: 'RESEND' };
         } else {
-          console.warn('[EmailService] Resposta Resend:', resData);
+          console.warn('[EmailService] Resposta Resend:', attempt.resData);
           return { 
             success: false, 
             provider: 'RESEND', 
-            error: resData.message || 'Erro ao enviar e-mail via Resend.' 
+            error: attempt.resData.message || 'Erro ao enviar e-mail via Resend.' 
           };
         }
       } catch (err: any) {

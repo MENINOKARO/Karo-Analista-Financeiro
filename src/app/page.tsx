@@ -159,8 +159,16 @@ export default function MarketMasterDashboard() {
     try {
       const res = await fetch('/api/telegram');
       const json = await res.json();
-      if (json.success && json.data) {
-        setTelegramConfig(json.data);
+      const savedChatId = typeof window !== 'undefined' ? localStorage.getItem('karo_telegram_chat_id') : null;
+      if (json.success && (json.data || json.config)) {
+        const loadedCfg = json.data || json.config;
+        setTelegramConfig(prev => ({
+          ...prev,
+          ...loadedCfg,
+          chatId: savedChatId || loadedCfg.chatId || prev.chatId || ''
+        }));
+      } else if (savedChatId) {
+        setTelegramConfig(prev => ({ ...prev, chatId: savedChatId }));
       }
     } catch (err) {
       console.error('Erro ao carregar configs do Telegram:', err);
@@ -171,6 +179,9 @@ export default function MarketMasterDashboard() {
     try {
       setTelegramSending(true);
       setTelegramStatusMsg('');
+      if (typeof window !== 'undefined' && cfg.chatId) {
+        localStorage.setItem('karo_telegram_chat_id', cfg.chatId.trim());
+      }
       const res = await fetch('/api/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -179,9 +190,9 @@ export default function MarketMasterDashboard() {
       const json = await res.json();
       if (json.success) {
         setTelegramConfig(cfg);
-        setTelegramStatusMsg('Configurações salvas com sucesso!');
+        setTelegramStatusMsg('✅ Configurações e preferências salvas com sucesso!');
       } else {
-        setTelegramStatusMsg(`Erro: ${json.error || 'Não foi possível salvar'}`);
+        setTelegramStatusMsg(`Erro: ${json.error || json.message || 'Não foi possível salvar'}`);
       }
     } catch (err: any) {
       setTelegramStatusMsg(`Erro de conexão: ${err.message}`);
@@ -194,16 +205,19 @@ export default function MarketMasterDashboard() {
     try {
       setTelegramSending(true);
       setTelegramStatusMsg('');
+      if (typeof window !== 'undefined' && telegramConfig.chatId) {
+        localStorage.setItem('karo_telegram_chat_id', telegramConfig.chatId.trim());
+      }
       const res = await fetch('/api/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'SEND_TEST_MESSAGE' })
+        body: JSON.stringify({ action: 'TEST_NOTIFICATION', config: telegramConfig })
       });
       const json = await res.json();
       if (json.success) {
-        setTelegramStatusMsg('Mensagem de teste enviada com sucesso no Telegram!');
+        setTelegramStatusMsg(json.message || '✅ Notificação oficial de teste enviada com sucesso no Telegram!');
       } else {
-        setTelegramStatusMsg(`Falha no envio: ${json.error || 'Verifique Token e Chat ID'}`);
+        setTelegramStatusMsg(json.message || json.error || 'Falha no envio.');
       }
     } catch (err: any) {
       setTelegramStatusMsg(`Erro de conexão: ${err.message}`);

@@ -73,7 +73,7 @@ export function TelegramTab({
             <label className="block text-xs font-semibold text-slate-300 mb-1">Seu Chat ID no Telegram</label>
             <input 
               type="text" 
-              placeholder="Ex: 5719851150"
+              placeholder="Digite seu Chat ID (ex: 123456789)"
               value={telegramConfig.chatId} 
               onChange={(e) => setTelegramConfig({ ...telegramConfig, chatId: e.target.value })}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-emerald-500 focus:outline-none"

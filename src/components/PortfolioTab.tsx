@@ -1,7 +1,27 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, Plus, Trash2, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, LineChart, DollarSign } from 'lucide-react';
+import { 
+  Briefcase, 
+  TrendingUp, 
+  TrendingDown, 
+  Plus, 
+  Trash2, 
+  ShieldCheck, 
+  Sparkles, 
+  CheckCircle2, 
+  AlertCircle, 
+  LineChart, 
+  DollarSign, 
+  Edit3, 
+  RefreshCw, 
+  Save, 
+  X, 
+  Check, 
+  Clock, 
+  ArrowUpRight, 
+  ArrowDownRight 
+} from 'lucide-react';
 import { PortfolioSummary, ActivePosition, MarketType } from '@/core/types';
 
 interface PortfolioTabProps {
@@ -11,6 +31,7 @@ interface PortfolioTabProps {
 }
 
 export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: PortfolioTabProps) {
+  // Modal de Adição
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [manualTicker, setManualTicker] = useState<string>('PETR4.SA');
   const [manualName, setManualName] = useState<string>('Petrobras PN');
@@ -19,7 +40,22 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   const [manualQty, setManualQty] = useState<number>(100);
   const [manualStop, setManualStop] = useState<number>(37.50);
   const [manualTarget, setManualTarget] = useState<number>(40.50);
+  const [manualTarget2, setManualTarget2] = useState<number>(42.00);
+
+  // Modal de Edição
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editingPos, setEditingPos] = useState<any | null>(null);
+  const [editEntry, setEditEntry] = useState<number>(0);
+  const [editQty, setEditQty] = useState<number>(0);
+  const [editStop, setEditStop] = useState<number>(0);
+  const [editTarget1, setEditTarget1] = useState<number>(0);
+  const [editTarget2, setEditTarget2] = useState<number>(0);
+  const [editStatus, setEditStatus] = useState<string>('ABERTA');
+  const [editName, setEditName] = useState<string>('');
+
   const [loadingAction, setLoadingAction] = useState<boolean>(false);
+  const [refreshingQuotes, setRefreshingQuotes] = useState<boolean>(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const summary = portfolioSummary || {
     totalCapitalInvested: 21760.00,
@@ -32,12 +68,131 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
     positions: []
   };
 
+  const getUserId = () => {
+    try {
+      const userSession = typeof window !== 'undefined' ? localStorage.getItem('karo_user_session') : null;
+      const parsedUser = userSession ? JSON.parse(userSession) : null;
+      return parsedUser?.id || 'usr_demo';
+    } catch {
+      return 'usr_demo';
+    }
+  };
+
+  const showToast = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 4000);
+  };
+
+  // Atualiza cotações ao vivo de todas as posições
+  const handleRefreshLiveQuotes = async () => {
+    try {
+      setRefreshingQuotes(true);
+      const userId = getUserId();
+      const res = await fetch(`/api/portfolio?userId=${userId}`);
+      const json = await res.json();
+      if (json.success) {
+        onRefresh();
+        showToast('Cotações atualizadas em tempo real com o feed B3!');
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar cotações:', err);
+    } finally {
+      setRefreshingQuotes(false);
+    }
+  };
+
+  // Abre modal de edição preenchido com os dados da posição selecionada
+  const handleOpenEditModal = (pos: any) => {
+    setEditingPos(pos);
+    setEditEntry(pos.entryPrice || 0);
+    setEditQty(pos.quantity || 0);
+    setEditStop(pos.stopLoss || 0);
+    setEditTarget1(pos.target1 || 0);
+    setEditTarget2(pos.target2 || (pos.entryPrice * 1.10));
+    setEditStatus(pos.status || 'ABERTA');
+    setEditName(pos.name || pos.ticker);
+    setShowEditModal(true);
+  };
+
+  // Salva alterações da posição
+  const handleSaveEdit = async () => {
+    if (!editingPos) return;
+    try {
+      setLoadingAction(true);
+      const userId = getUserId();
+
+      const res = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'UPDATE_POSITION',
+          userId,
+          payload: {
+            id: editingPos.id,
+            name: editName,
+            entryPrice: editEntry,
+            quantity: editQty,
+            stopLoss: editStop,
+            target1: editTarget1,
+            target2: editTarget2,
+            status: editStatus
+          }
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setShowEditModal(false);
+        onRefresh();
+        showToast(`Posição ${editingPos.ticker} atualizada com sucesso!`);
+      }
+    } catch (err) {
+      console.error('Erro ao editar posição:', err);
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  // Mover Stop para o Breakeven (Risco Zero)
+  const handleSetBreakeven = () => {
+    setEditStop(editEntry);
+    setEditStatus('STOP_BREAKEVEN');
+    showToast('Stop Loss ajustado para o Preço de Entrada (Risco Zero)!');
+  };
+
+  // Encerrar posição ao preço de mercado
+  const handleClosePosition = async (id: string, currentPrice?: number) => {
+    try {
+      setLoadingAction(true);
+      const userId = getUserId();
+
+      const res = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'CLOSE_POSITION',
+          userId,
+          payload: { id, exitPrice: currentPrice }
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        if (showEditModal) setShowEditModal(false);
+        onRefresh();
+        showToast('Operação encerrada e P&L registrado com sucesso!');
+      }
+    } catch (err) {
+      console.error('Erro ao encerrar posição:', err);
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
   const handleAddManual = async () => {
     try {
       setLoadingAction(true);
-      const userSession = typeof window !== 'undefined' ? localStorage.getItem('karo_user_session') : null;
-      const parsedUser = userSession ? JSON.parse(userSession) : null;
-      const userId = parsedUser?.id || 'usr_demo';
+      const userId = getUserId();
 
       const res = await fetch('/api/portfolio', {
         method: 'POST',
@@ -52,7 +207,8 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
             entryPrice: manualEntry,
             quantity: manualQty,
             stopLoss: manualStop,
-            target1: manualTarget
+            target1: manualTarget,
+            target2: manualTarget2
           }
         })
       });
@@ -60,6 +216,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
       if (json.success) {
         setShowAddModal(false);
         onRefresh();
+        showToast(`Posição em ${manualTicker} cadastrada na carteira!`);
       }
     } catch (err) {
       console.error('Erro ao adicionar posição:', err);
@@ -69,11 +226,10 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   };
 
   const handleRemovePosition = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este registro da sua carteira?')) return;
     try {
       setLoadingAction(true);
-      const userSession = typeof window !== 'undefined' ? localStorage.getItem('karo_user_session') : null;
-      const parsedUser = userSession ? JSON.parse(userSession) : null;
-      const userId = parsedUser?.id || 'usr_demo';
+      const userId = getUserId();
 
       await fetch('/api/portfolio', {
         method: 'POST',
@@ -81,6 +237,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
         body: JSON.stringify({ action: 'REMOVE_POSITION', userId, payload: { id } })
       });
       onRefresh();
+      showToast('Posição removida da carteira.');
     } catch (err) {
       console.error('Erro ao remover posição:', err);
     } finally {
@@ -92,6 +249,19 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
 
   return (
     <div className="space-y-6">
+      {/* TOAST DE FEEDBACK */}
+      {successMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-between shadow-lg animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* HEADER DE PATRIMÔNIO & RENTABILIDADE */}
       <div className="bg-[#0d1322] border border-slate-800 p-6 rounded-2xl">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800">
@@ -100,19 +270,31 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
               <Briefcase className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Minha Carteira & Acompanhamento de Posições</h2>
+              <h2 className="text-base font-bold text-white">Minha Carteira & Gestão de Posições</h2>
               <p className="text-xs text-slate-400">
-                O robô monitora suas ações em tempo real, avisando quando realizar lucros parciais ou mover o Stop para o Breakeven.
+                Acompanhe o valor real das suas ações e opções com feed B3 atualizado e consultoria ao vivo do robô.
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" /> Cadastrar Ação na Carteira
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefreshLiveQuotes}
+              disabled={refreshingQuotes}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 font-bold text-xs shadow-md transition flex items-center gap-1.5"
+              title="Sincronizar com as cotações em tempo real do Radar"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingQuotes ? 'animate-spin text-cyan-400' : ''}`} />
+              {refreshingQuotes ? 'Atualizando B3...' : 'Atualizar Cotações'}
+            </button>
+
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> Cadastrar Ação
+            </button>
+          </div>
         </div>
 
         {/* CARDS DE RESUMO FINANCEIRO */}
@@ -126,7 +308,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
 
           <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl">
             <span className="text-[10px] uppercase font-semibold text-slate-400 block">Valor Atual de Mercado</span>
-            <span className="text-lg font-bold text-white font-mono mt-1 block">
+            <span className="text-lg font-bold text-cyan-300 font-mono mt-1 block">
               R$ {summary.totalCurrentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -150,16 +332,21 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
 
       {/* LISTA DE POSIÇÕES ATIVAS MONITORADAS PELO ROBÔ */}
       <div className="space-y-4">
-        <h3 className="text-sm uppercase font-bold text-slate-300 tracking-wider flex items-center gap-2">
-          <span>Posições em Andamento (Guardião do Robô):</span>
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm uppercase font-bold text-slate-300 tracking-wider flex items-center gap-2">
+            <span>Posições em Andamento (Guardião do Robô):</span>
+          </h3>
+          <span className="text-[11px] text-slate-500 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-cyan-400" /> Monitoramento Contínuo B3
+          </span>
+        </div>
 
         {summary.positions.length === 0 ? (
           <div className="text-center py-16 bg-[#0d1322] border border-slate-800 rounded-2xl">
             <Briefcase className="w-10 h-10 text-slate-600 mx-auto mb-2" />
             <p className="text-slate-300 font-semibold text-sm">Nenhuma posição ativa cadastrada no momento.</p>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              Vá na aba de Radar de Oportunidades e clique em <strong>"⚡ Entrei no Trade"</strong> para o robô começar a acompanhar sua operação, ou cadastre manualmente acima!
+              Vá na aba de Radar de Oportunidades e clique em <strong>"⚡ Entrei no Trade"</strong> para o robô acompanhar sua operação, ou clique em <strong>"Cadastrar Ação"</strong> acima para registrar manualmente!
             </p>
           </div>
         ) : (
@@ -178,7 +365,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                     {/* Header da Posição */}
                     <div className="flex items-start justify-between gap-3 mb-4">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-lg font-bold text-white tracking-tight">{pos.ticker}</span>
                           <span className="text-xs text-slate-400">({pos.name})</span>
                           {pos.modality === 'OPTIONS' || (pos.ticker.length >= 7 && !pos.ticker.includes('.SA') && !pos.ticker.includes('USD')) ? (
@@ -190,9 +377,14 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                               {pos.quantity} cotas
                             </span>
                           )}
+                          {isBreakeven && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                              🛡️ Stop no Breakeven
+                            </span>
+                          )}
                         </div>
                         <span className="text-[10px] text-slate-500 block mt-0.5">
-                          Origem: {pos.originSetup || 'Entrada Registrada'}
+                          Origem: {pos.originSetup || 'Entrada Registrada'} • Status: <strong className="text-slate-400">{pos.status}</strong>
                         </span>
                       </div>
 
@@ -216,9 +408,9 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                         </span>
                         <span className="font-bold text-white font-mono">R$ {pos.entryPrice.toFixed(2)}</span>
                       </div>
-                      <div>
-                        <span className="text-[10px] uppercase text-cyan-400 block">
-                          {pos.modality === 'OPTIONS' ? 'Prêmio Atual' : 'Cotação Atual'}
+                      <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-lg py-1">
+                        <span className="text-[10px] uppercase text-cyan-400 block font-semibold">
+                          Cotação Atual
                         </span>
                         <span className="font-bold text-cyan-300 font-mono">R$ {pos.currentPrice.toFixed(2)}</span>
                       </div>
@@ -246,7 +438,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                     }`}>
                       <div className="flex items-center gap-1.5 font-bold mb-1">
                         <Sparkles className="w-4 h-4 text-emerald-400" />
-                        Guardião do Robô (Acompanhamento em Tempo Real):
+                        Guardião do Robô (Tempo Real):
                       </div>
                       <p className="italic">{pos.robotAdvice}</p>
                     </div>
@@ -255,17 +447,24 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                   {/* Ações da Posição */}
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
                     <button
-                      onClick={() => onOpenChart(pos.ticker)}
-                      className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center justify-center gap-1.5"
+                      onClick={() => handleOpenEditModal(pos)}
+                      className="flex-1 py-2 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-xs font-semibold text-cyan-300 transition flex items-center justify-center gap-1.5"
                     >
-                      <LineChart className="w-3.5 h-3.5 text-cyan-400" /> Ver Gráfico
+                      <Edit3 className="w-3.5 h-3.5" /> Editar Posição
+                    </button>
+                    <button
+                      onClick={() => onOpenChart(pos.ticker)}
+                      className="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center justify-center gap-1.5"
+                    >
+                      <LineChart className="w-3.5 h-3.5 text-cyan-400" /> Gráfico
                     </button>
                     <button
                       onClick={() => handleRemovePosition(pos.id)}
                       disabled={loadingAction}
                       className="px-3 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 text-xs font-semibold transition flex items-center gap-1"
+                      title="Excluir da carteira"
                     >
-                      <Trash2 className="w-3.5 h-3.5" /> Encerrar
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -275,13 +474,156 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
         )}
       </div>
 
+      {/* ========================================================================= */}
+      {/* MODAL DE EDIÇÃO DE POSIÇÃO */}
+      {/* ========================================================================= */}
+      {showEditModal && editingPos && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0d1322] border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-cyan-400" />
+                <h3 className="font-bold text-white text-base">Editar Posição • {editingPos.ticker}</h3>
+              </div>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Nome / Descrição:</label>
+                <input 
+                  type="text" 
+                  value={editName} 
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">Preço de Entrada (R$):</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={editEntry} 
+                    onChange={(e) => setEditEntry(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">Quantidade:</label>
+                  <input 
+                    type="number" 
+                    value={editQty} 
+                    onChange={(e) => setEditQty(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-rose-400 font-semibold block mb-1">Stop Loss (R$):</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={editStop} 
+                    onChange={(e) => setEditStop(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-rose-400 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-emerald-400 font-semibold block mb-1">Alvo 1 (R$):</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={editTarget1} 
+                    onChange={(e) => setEditTarget1(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-emerald-400 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-cyan-400 font-semibold block mb-1">Alvo 2 (R$):</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={editTarget2} 
+                    onChange={(e) => setEditTarget2(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-cyan-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Botão de Breakeven Rápido */}
+              <button
+                type="button"
+                onClick={handleSetBreakeven}
+                className="w-full py-2 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Mover Stop para Breakeven (R$ {editEntry.toFixed(2)})
+              </button>
+
+              {/* Status do Trade */}
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Status da Posição:</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-semibold"
+                >
+                  <option value="ABERTA">ABERTA (Em Andamento)</option>
+                  <option value="STOP_BREAKEVEN">STOP BREAKEVEN (Risco Zero)</option>
+                  <option value="ALVO_1_ATINGIDO">ALVO 1 ATINGIDO (Realização Parcial)</option>
+                  <option value="ENCERRADA_LUCRO">ENCERRADA NO LUCRO (Meta Concluída)</option>
+                  <option value="ENCERRADA_STOP">ENCERRADA NO STOP LOSS</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Ações do Modal de Edição */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleSaveEdit}
+                  disabled={loadingAction}
+                  className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 transition flex items-center justify-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" /> Salvar Alterações
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleClosePosition(editingPos.id, editingPos.currentPrice)}
+                disabled={loadingAction}
+                className="w-full py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-bold text-xs transition flex items-center justify-center gap-1"
+              >
+                🏁 Encerrar Operação ao Preço Atual (R$ {editingPos.currentPrice?.toFixed(2)})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL DE CADASTRO MANUAL DE AÇÕES */}
+      {/* ========================================================================= */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d1322] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-[#0d1322] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-bold text-white text-base">Cadastrar Ação que Já Possuo</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -358,7 +700,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                   />
                 </div>
                 <div>
-                  <label className="text-emerald-400 font-semibold block mb-1">Alvo de Lucro (R$):</label>
+                  <label className="text-emerald-400 font-semibold block mb-1">Alvo 1 de Lucro (R$):</label>
                   <input 
                     type="number" 
                     step="0.01" 
@@ -373,14 +715,14 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
             <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
               >
                 Cancelar
               </button>
               <button 
                 onClick={handleAddManual}
                 disabled={loadingAction}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition"
               >
                 Salvar & Acompanhar
               </button>

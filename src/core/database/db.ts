@@ -301,6 +301,95 @@ export class KaroDatabase {
     return false;
   }
 
+  public static updatePosition(
+    userId: string, 
+    positionId: string, 
+    updates: Partial<StoredTradePosition>
+  ): StoredTradePosition | null {
+    const db = this.load();
+    if (!db.portfolios[userId]) return null;
+
+    const pos = db.portfolios[userId].find(p => p.id === positionId);
+    if (!pos) return null;
+
+    if (updates.entryPrice !== undefined) pos.entryPrice = Number(updates.entryPrice);
+    if (updates.quantity !== undefined) pos.quantity = Number(updates.quantity);
+    if (updates.stopLoss !== undefined) pos.stopLoss = Number(updates.stopLoss);
+    if (updates.target1 !== undefined) pos.target1 = Number(updates.target1);
+    if (updates.target2 !== undefined) pos.target2 = Number(updates.target2);
+    if (updates.status !== undefined) pos.status = updates.status;
+    if (updates.name !== undefined) pos.name = updates.name;
+    if (updates.robotAdvice !== undefined) pos.robotAdvice = updates.robotAdvice;
+
+    // Recalcula totais
+    pos.totalInvested = Number((pos.quantity * pos.entryPrice).toFixed(2));
+    const currentP = pos.currentPrice || pos.entryPrice;
+    pos.currentValue = Number((pos.quantity * currentP).toFixed(2));
+    pos.pnlAmount = Number((pos.currentValue - pos.totalInvested).toFixed(2));
+    pos.pnlPercent = pos.totalInvested > 0 ? Number(((pos.pnlAmount / pos.totalInvested) * 100).toFixed(2)) : 0;
+
+    this.save();
+    return pos;
+  }
+
+  public static closePosition(userId: string, positionId: string, exitPrice?: number): StoredTradePosition | null {
+    const db = this.load();
+    if (!db.portfolios[userId]) return null;
+
+    const idx = db.portfolios[userId].findIndex(p => p.id === positionId);
+    if (idx === -1) return null;
+
+    const [pos] = db.portfolios[userId].splice(idx, 1);
+    const finalPrice = exitPrice || pos.currentPrice || pos.entryPrice;
+    pos.currentPrice = finalPrice;
+    pos.currentValue = Number((pos.quantity * finalPrice).toFixed(2));
+    pos.pnlAmount = Number((pos.currentValue - pos.totalInvested).toFixed(2));
+    pos.pnlPercent = pos.totalInvested > 0 ? Number(((pos.pnlAmount / pos.totalInvested) * 100).toFixed(2)) : 0;
+    pos.status = pos.pnlAmount >= 0 ? 'ENCERRADA_LUCRO' : 'ENCERRADA_STOP';
+    pos.robotAdvice = `🏁 Operação encerrada com P&L de R$ ${pos.pnlAmount.toFixed(2)} (${pos.pnlPercent}%).`;
+
+    if (!db.closedTrades[userId]) db.closedTrades[userId] = [];
+    db.closedTrades[userId].unshift(pos);
+    this.save();
+    return pos;
+  }
+
+  public static updateUserPositionsLiveQuotes(userId: string, quotesMap: Record<string, number>): StoredTradePosition[] {
+    const db = this.load();
+    if (!db.portfolios[userId] || db.portfolios[userId].length === 0) return [];
+
+    for (const pos of db.portfolios[userId]) {
+      const cleanTicker = pos.ticker.replace(/\.SA$/, '');
+      const withSuffix = cleanTicker + '.SA';
+      
+      const livePrice = quotesMap[pos.ticker] || quotesMap[withSuffix] || quotesMap[cleanTicker];
+      if (livePrice && livePrice > 0) {
+        pos.currentPrice = Number(livePrice.toFixed(2));
+        pos.currentValue = Number((pos.quantity * pos.currentPrice).toFixed(2));
+        pos.pnlAmount = Number((pos.currentValue - pos.totalInvested).toFixed(2));
+        pos.pnlPercent = pos.totalInvested > 0 ? Number(((pos.pnlAmount / pos.totalInvested) * 100).toFixed(2)) : 0;
+
+        // Atualiza parecer do robô com base na cotação real atualizada
+        if (pos.target2 && pos.currentPrice >= pos.target2) {
+          pos.robotAdvice = `🎯 ALVO 2 ATINGIDO (+${pos.pnlPercent}%)! Realize o lucro máximo e encerre a posição.`;
+        } else if (pos.target1 && pos.currentPrice >= pos.target1) {
+          pos.robotAdvice = `🎯 ALVO 1 ATINGIDO (+${pos.pnlPercent}%)! Realize 50% e ajuste o Stop para o Breakeven (R$ ${pos.entryPrice.toFixed(2)}).`;
+        } else if (pos.stopLoss && pos.currentPrice <= pos.stopLoss && pos.stopLoss > 0) {
+          pos.robotAdvice = `⚠️ ATENÇÃO: Cotação atual (R$ ${pos.currentPrice.toFixed(2)}) atingiu a zona de Stop Loss (R$ ${pos.stopLoss.toFixed(2)}).`;
+        } else if (pos.pnlPercent >= 3) {
+          pos.robotAdvice = `🚀 Lucro expressivo (+${pos.pnlPercent}%). Sugerimos proteger os ganhos subindo o Stop para R$ ${pos.entryPrice.toFixed(2)}.`;
+        } else if (pos.pnlPercent > 0) {
+          pos.robotAdvice = `📈 Posição no lucro (+${pos.pnlPercent}%). Mantenha a estratégia rumo ao Alvo 1 em R$ ${(pos.target1 || pos.entryPrice * 1.05).toFixed(2)}.`;
+        } else {
+          pos.robotAdvice = `⏳ Monitoramento ativo (${pos.pnlPercent}%). Stop de proteção em R$ ${(pos.stopLoss || pos.entryPrice * 0.95).toFixed(2)}.`;
+        }
+      }
+    }
+
+    this.save();
+    return db.portfolios[userId];
+  }
+
   public static getPortfolioSummary(userId: string): PortfolioSummary {
     const positions = this.getUserPositions(userId);
     const totalInvested = positions.reduce((acc, p) => acc + (p.totalInvested || 0), 0);

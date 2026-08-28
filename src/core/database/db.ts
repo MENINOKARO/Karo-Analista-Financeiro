@@ -129,6 +129,11 @@ export class KaroDatabase {
     return db.users.find(u => u.email.toLowerCase() === cleanEmail) || null;
   }
 
+  public static getAllUsers(): UserProfile[] {
+    const db = this.load();
+    return db.users || [];
+  }
+
   public static findUserById(id: string): UserProfile | null {
     const db = this.load();
     return db.users.find(u => u.id === id) || null;
@@ -273,6 +278,23 @@ export class KaroDatabase {
   public static getUserPositions(userId: string): StoredTradePosition[] {
     const db = this.load();
     return db.portfolios[userId] || [];
+  }
+
+  public static syncUserPositions(userId: string, positions: StoredTradePosition[]): void {
+    const db = this.load();
+    if (!db.portfolios[userId]) {
+      db.portfolios[userId] = [];
+    }
+
+    for (const p of positions) {
+      const idx = db.portfolios[userId].findIndex(existing => existing.id === p.id);
+      if (idx === -1) {
+        db.portfolios[userId].unshift(p);
+      } else {
+        db.portfolios[userId][idx] = { ...db.portfolios[userId][idx], ...p };
+      }
+    }
+    this.save();
   }
 
   public static addPosition(userId: string, position: StoredTradePosition): StoredTradePosition {

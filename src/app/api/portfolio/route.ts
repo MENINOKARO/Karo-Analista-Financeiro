@@ -203,6 +203,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 6. SINCRONIZAR POSIÇÕES DO NAVEGADOR COM O SERVIDOR
+    if (action === 'SYNC_POSITIONS') {
+      const { positions } = payload;
+      if (Array.isArray(positions) && positions.length > 0) {
+        KaroDatabase.syncUserPositions(userId, positions);
+      }
+      const summary = KaroDatabase.getPortfolioSummary(userId);
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Posições sincronizadas com sucesso.',
+        data: summary
+      });
+    }
+
     return NextResponse.json({ success: false, message: 'Ação desconhecida.' }, { status: 400 });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

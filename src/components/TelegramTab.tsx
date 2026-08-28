@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import { Smartphone, CheckCircle2, Send } from 'lucide-react';
@@ -69,10 +69,68 @@ export function TelegramTab({
             />
           </div>
 
-          <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl">
+          <div className="space-y-2 pt-1">
+            <h4 className="text-xs font-bold text-slate-200">Escolha quais tipos de alertas deseja receber:</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <label className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                <div>
+                  <span className="text-xs font-semibold text-white block">⚡ Oportunidades do Radar</span>
+                  <span className="text-[10px] text-slate-400">Setups com Score ≥ {telegramConfig.minScore}%</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={telegramConfig.notifyOpportunities !== false} 
+                  onChange={(e) => setTelegramConfig({ ...telegramConfig, notifyOpportunities: e.target.checked })}
+                  className="w-4 h-4 accent-emerald-500"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                <div>
+                  <span className="text-xs font-semibold text-rose-300 block">⚠️ Proximidade de Stop</span>
+                  <span className="text-[10px] text-slate-400">Aviso quando o preço chegar perto do Stop</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={telegramConfig.notifyStopProximity !== false} 
+                  onChange={(e) => setTelegramConfig({ ...telegramConfig, notifyStopProximity: e.target.checked })}
+                  className="w-4 h-4 accent-rose-500"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                <div>
+                  <span className="text-xs font-semibold text-emerald-300 block">🎯 Alcance de Alvos</span>
+                  <span className="text-[10px] text-slate-400">Alvo 1 (Parcial) e Alvo 2 (Final)</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={telegramConfig.notifyTargets !== false} 
+                  onChange={(e) => setTelegramConfig({ ...telegramConfig, notifyTargets: e.target.checked })}
+                  className="w-4 h-4 accent-emerald-500"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                <div>
+                  <span className="text-xs font-semibold text-cyan-300 block">📰 Notícias & Mudanças B3</span>
+                  <span className="text-[10px] text-slate-400">Fatos relevantes e balanços das empresas</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={telegramConfig.notifyNews !== false} 
+                  onChange={(e) => setTelegramConfig({ ...telegramConfig, notifyNews: e.target.checked })}
+                  className="w-4 h-4 accent-cyan-500"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-slate-900/60 border border-slate-800 rounded-xl">
             <div>
-              <span className="text-xs font-semibold text-slate-200 block">Ativar Disparos Automáticos de 5m</span>
-              <span className="text-[11px] text-slate-400">Disparar alertas apenas quando o Score de Confluência for ≥ {telegramConfig.minScore}%</span>
+              <span className="text-xs font-semibold text-slate-200 block">Ativação Global do Telegram Bot</span>
+              <span className="text-[11px] text-slate-400">Liga/Desliga todos os disparos automáticos</span>
             </div>
             <input 
               type="checkbox" 

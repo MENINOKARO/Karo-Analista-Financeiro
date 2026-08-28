@@ -355,4 +355,8 @@ export interface TelegramConfig {
   chatId: string;
   enabled: boolean;
   minScore: number;
+  notifyOpportunities?: boolean;
+  notifyStopProximity?: boolean;
+  notifyTargets?: boolean;
+  notifyNews?: boolean;
 }

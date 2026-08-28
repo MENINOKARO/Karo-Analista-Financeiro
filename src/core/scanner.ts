@@ -5,6 +5,7 @@ import { SeniorAnalystEngine } from './analyst-engine';
 import { TelegramNotificationService } from './notifications/telegram';
 import { NewsService } from './news-service';
 import { PortfolioService } from './portfolio-service';
+import { KaroDatabase } from './database/db';
 
 export class MarketScannerEngine {
   private static cachedOpportunities: SeniorAnalysisResult[] = [];
@@ -15,7 +16,11 @@ export class MarketScannerEngine {
     botToken: '',
     chatId: '',
     enabled: false,
-    minScore: 75
+    minScore: 75,
+    notifyOpportunities: true,
+    notifyStopProximity: true,
+    notifyTargets: true,
+    notifyNews: true
   };
 
   public static setTelegramConfig(config: Partial<TelegramConfig>) {
@@ -50,6 +55,7 @@ export class MarketScannerEngine {
 
         if (candles5m.length > 0) {
           livePriceMap.set(tickerInfo.symbol, candles5m[candles5m.length - 1].close);
+          livePriceMap.set(tickerInfo.symbol.replace(/\.SA$/, ''), candles5m[candles5m.length - 1].close);
         }
 
         const analysis = SeniorAnalystEngine.evaluateStock(
@@ -64,7 +70,7 @@ export class MarketScannerEngine {
           analysis.market = 'B3';
           opportunities.push(analysis);
 
-          if (this.telegramConfig.enabled) {
+          if (this.telegramConfig.enabled && this.telegramConfig.notifyOpportunities !== false) {
             await TelegramNotificationService.sendSeniorSignalAlert(analysis, this.telegramConfig);
           }
         }
@@ -98,7 +104,7 @@ export class MarketScannerEngine {
           analysis.market = 'CRYPTO';
           opportunities.push(analysis);
 
-          if (this.telegramConfig.enabled) {
+          if (this.telegramConfig.enabled && this.telegramConfig.notifyOpportunities !== false) {
             await TelegramNotificationService.sendSeniorSignalAlert(analysis, this.telegramConfig);
           }
         }
@@ -109,8 +115,48 @@ export class MarketScannerEngine {
 
     await Promise.all([...b3Promises, ...cryptoPromises]);
 
-    // 3. ACOMPANHAMENTO ATIVO DA CARTEIRA DO USUÁRIO (GUARDIÃO DE TRADES)
-    await PortfolioService.updatePositionsWithCurrentPrices(livePriceMap, this.telegramConfig);
+    // 3. ACOMPANHAMENTO ATIVO DA CARTEIRA & ALERTAS DE PROXIMIDADE DE STOP / ALVOS
+    if (this.telegramConfig.enabled) {
+      try {
+        const users = KaroDatabase.getAllUsers();
+        for (const u of users) {
+          const positions = KaroDatabase.getUserPositions(u.id);
+          for (const pos of positions) {
+            const clean = pos.ticker.replace(/\.SA$/, '');
+            const livePrice = livePriceMap.get(pos.ticker) || livePriceMap.get(clean) || pos.currentPrice;
+            if (livePrice && livePrice > 0) {
+              pos.currentPrice = livePrice;
+              // Alerta de Proximidade de Stop Loss (a menos de 1.5% do Stop)
+              if (pos.stopLoss > 0 && livePrice <= pos.stopLoss * 1.015 && livePrice > pos.stopLoss) {
+                await TelegramNotificationService.sendStopProximityAlert(pos, this.telegramConfig);
+              }
+              // Alerta de Alvo 1
+              if (pos.target1 && livePrice >= pos.target1 && pos.status === 'ABERTA') {
+                await TelegramNotificationService.sendFollowUpAlert(pos, 'ALVO_1', this.telegramConfig);
+              }
+              // Alerta de Alvo 2 (Final)
+              if (pos.target2 && livePrice >= pos.target2 && pos.status !== 'ENCERRADA_LUCRO') {
+                await TelegramNotificationService.sendFollowUpAlert(pos, 'ALVO_FINAL', this.telegramConfig);
+              }
+              // Alerta de Stop Executado
+              if (pos.stopLoss > 0 && livePrice <= pos.stopLoss && pos.status !== 'ENCERRADA_STOP') {
+                await TelegramNotificationService.sendFollowUpAlert(pos, 'STOP_LOSS', this.telegramConfig);
+              }
+            }
+          }
+        }
+
+        // 4. Alerta de Notícias Importantes de Alto Impacto
+        if (this.telegramConfig.notifyNews !== false && this.cachedNews.length > 0) {
+          const highImpactNews = this.cachedNews.filter(n => n.impactLevel === 'ALTO');
+          for (const news of highImpactNews.slice(0, 1)) {
+            await TelegramNotificationService.sendMarketNewsAlert(news, this.telegramConfig);
+          }
+        }
+      } catch (err: any) {
+        console.error('[Scanner Telegram Alert error]:', err?.message);
+      }
+    }
 
     opportunities.sort((a, b) => b.confluenceScore - a.confluenceScore);
 

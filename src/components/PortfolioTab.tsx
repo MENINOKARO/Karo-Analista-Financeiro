@@ -171,6 +171,9 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
       const json = await res.json();
       if (json.success) {
         setShowEditModal(false);
+        if (json.summary && typeof window !== 'undefined') {
+          localStorage.setItem(`karo_portfolio_${userId}`, JSON.stringify(json.summary.positions || []));
+        }
         onRefresh();
         showToast(`Posição ${editingPos.ticker} atualizada com sucesso!`);
       }
@@ -212,6 +215,9 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
       if (json.success) {
         setShowCloseModal(false);
         if (showEditModal) setShowEditModal(false);
+        if (json.summary && typeof window !== 'undefined') {
+          localStorage.setItem(`karo_portfolio_${userId}`, JSON.stringify(json.summary.positions || []));
+        }
         onRefresh();
         showToast(`Operação em ${closingPos.ticker} encerrada com sucesso!`);
       }
@@ -248,6 +254,9 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
       const json = await res.json();
       if (json.success) {
         setShowAddModal(false);
+        if (json.summary && typeof window !== 'undefined') {
+          localStorage.setItem(`karo_portfolio_${userId}`, JSON.stringify(json.summary.positions || []));
+        }
         onRefresh();
         showToast(`Posição em ${manualTicker} (${manualName}) cadastrada com sucesso!`);
       }
@@ -264,11 +273,15 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
       setLoadingAction(true);
       const userId = getUserId();
 
-      await fetch('/api/portfolio', {
+      const res = await fetch('/api/portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'REMOVE_POSITION', userId, payload: { id } })
       });
+      const json = await res.json();
+      if (json.summary && typeof window !== 'undefined') {
+        localStorage.setItem(`karo_portfolio_${userId}`, JSON.stringify(json.summary.positions || []));
+      }
       onRefresh();
       showToast('Posição removida da carteira.');
     } catch (err) {

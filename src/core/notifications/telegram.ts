@@ -229,37 +229,47 @@ ${icon} *${title}* ${icon}
   }
 
   public static async sendTestNotification(config: TelegramConfig): Promise<{ success: boolean; message: string }> {
-    if (!config.botToken || !config.chatId) {
-      return { success: false, message: 'Bot Token e Chat ID são obrigatórios.' };
+    const botToken = config.botToken || '8870401097:AAGStWSy-NzsnMZKVL_VTaCUErqV116DTvM';
+    const cleanChatId = (config.chatId || '').trim().replace(/[^0-9-]/g, '');
+
+    if (!cleanChatId) {
+      return { success: false, message: 'Por favor, informe o seu Chat ID numérico (ex: 5719851150).' };
     }
 
     try {
-      const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
       const testMsg = `
 🤖 *[CONEXÃO B3 + TELEGRAM + CARTEIRA ATIVA]*
 ━━━━━━━━━━━━━━━━━━━━
-✅ O seu robô analista sênior foi conectado com sucesso!
+✅ Olá! A sua conexão com o *Karo Analista Financeiro* foi ativada com sucesso!
 
-📡 *Canais Ativos no seu Telegram:*
-• ⚡ Novas Oportunidades do Radar (Score ≥ ${config.minScore}%)
-• ⚠️ Alertas de Proximidade de Stop Loss
+📡 *Canais Habilitados no seu Celular:*
+• ⚡ Novas Oportunidades do Radar (Score ≥ ${config.minScore || 75}%)
+• ⚠️ Alertas de Proximidade de Stop Loss das suas ações
 • 🎯 Alertas de Alcance de Alvo 1 e Alvo 2
-• 📰 Notícias Relevantes e Catalisadores Macro
+• 📰 Notícias Relevantes e Catalisadores B3
 
 Bons trades com risco controlado! 🚀
       `.trim();
 
       await axios.post(url, {
-        chat_id: config.chatId,
+        chat_id: cleanChatId,
         text: testMsg,
         parse_mode: 'Markdown'
       });
 
-      return { success: true, message: 'Notificação enviada com sucesso para o seu celular!' };
+      return { success: true, message: '✅ Notificação de teste enviada com sucesso para o seu celular!' };
     } catch (err: any) {
+      const desc = err?.response?.data?.description || err?.message;
+      if (desc && desc.includes('chat not found')) {
+        return {
+          success: false,
+          message: '⚠️ Quase lá! Abra o robô @Karo_AF_bot no Telegram e clique em "INICIAR" (Start) uma vez para autorizar o recebimento de alertas.'
+        };
+      }
       return { 
         success: false, 
-        message: `Falha ao enviar: ${err?.response?.data?.description || err?.message}` 
+        message: `Falha no envio: ${desc}` 
       };
     }
   }

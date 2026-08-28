@@ -34,35 +34,46 @@ export function TelegramTab({
           </div>
         </div>
 
-        <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl mb-6 text-xs text-slate-300 space-y-2">
-          <h4 className="font-bold text-emerald-400 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" /> Como configurar em menos de 1 minuto:
-          </h4>
-          <ol className="list-decimal list-inside space-y-1 text-slate-400">
-            <li>Abra o Telegram no seu celular e busque por <strong>@BotFather</strong>.</li>
-            <li>Envie o comando <code>/newbot</code>, escolha um nome e copie o <strong>Bot Token</strong> gerado.</li>
-            <li>Busque por <strong>@userinfobot</strong> no Telegram e pegue o seu <strong>Chat ID</strong> numérico.</li>
-            <li>Cole ambos os campos abaixo e clique em <strong>Salvar & Testar</strong>.</li>
-          </ol>
+        <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl mb-6 text-xs text-slate-300 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-bold text-white text-sm">Bot Oficial do Sistema:</span>
+              <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-mono font-bold text-xs">
+                @Karo_AF_bot
+              </span>
+            </div>
+            <span className="text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-bold">
+              ✓ Autenticado & Certificado
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-slate-300 leading-relaxed text-xs">
+              Para receber alertas de oportunidades, proximidade de stop e metas batidas, clique no botão abaixo para abrir o robô oficial e toque em <strong>INICIAR (Start)</strong>:
+            </p>
+
+            <a 
+              href="https://t.me/Karo_AF_bot" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" /> 🚀 Abrir @Karo_AF_bot no Telegram (1-Clique)
+            </a>
+          </div>
+
+          <div className="pt-2 text-[11px] text-slate-400">
+            💡 <em>Se não souber seu Chat ID, você pode consultar enviando qualquer mensagem para <strong>@userinfobot</strong> no Telegram.</em>
+          </div>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Telegram Bot Token (API Key)</label>
-            <input 
-              type="password" 
-              placeholder="Ex: 7123456789:AAHk1_..."
-              value={telegramConfig.botToken} 
-              onChange={(e) => setTelegramConfig({ ...telegramConfig, botToken: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Seu Chat ID no Telegram</label>
             <input 
               type="text" 
-              placeholder="Ex: 123456789"
+              placeholder="Ex: 5719851150"
               value={telegramConfig.chatId} 
               onChange={(e) => setTelegramConfig({ ...telegramConfig, chatId: e.target.value })}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-emerald-500 focus:outline-none"

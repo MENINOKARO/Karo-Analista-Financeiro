@@ -99,34 +99,13 @@ export default function MarketMasterDashboard() {
     try {
       const targetUserId = uid || currentUser?.id || 'usr_demo';
       const localKey = `karo_portfolio_${targetUserId}`;
-      const savedLocal = typeof window !== 'undefined' ? localStorage.getItem(localKey) : null;
-      let localPositions = savedLocal ? JSON.parse(savedLocal) : null;
 
       const res = await fetch(`/api/portfolio?userId=${targetUserId}`);
       const json = await res.json();
       if (json.success && json.data) {
-        if (json.data.positions && json.data.positions.length > 0) {
-          setPortfolioSummary(json.data);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(localKey, JSON.stringify(json.data.positions));
-          }
-        } else if (localPositions && localPositions.length > 0) {
-          // Servidor lambdas reiniciou -> recupera automaticamente do armazenamento do navegador
-          const syncRes = await fetch('/api/portfolio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'SYNC_POSITIONS',
-              userId: targetUserId,
-              payload: { positions: localPositions }
-            })
-          });
-          const syncJson = await syncRes.json();
-          if (syncJson.success && syncJson.data) {
-            setPortfolioSummary(syncJson.data);
-          }
-        } else {
-          setPortfolioSummary(json.data);
+        setPortfolioSummary(json.data);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(localKey, JSON.stringify(json.data.positions || []));
         }
       }
     } catch (err) {

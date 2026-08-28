@@ -55,6 +55,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   const [editTarget2, setEditTarget2] = useState<number>(0);
   const [editStatus, setEditStatus] = useState<string>('ABERTA');
   const [editName, setEditName] = useState<string>('');
+  const [editCurrentPrice, setEditCurrentPrice] = useState<number>(0);
 
   // Modal de Finalizar Operação
   const [showCloseModal, setShowCloseModal] = useState<boolean>(false);
@@ -126,6 +127,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
   const handleOpenEditModal = (pos: any) => {
     setEditingPos(pos);
     setEditEntry(pos.entryPrice || 0);
+    setEditCurrentPrice(pos.currentPrice !== undefined ? pos.currentPrice : (pos.entryPrice || 0));
     setEditQty(pos.quantity || 0);
     setEditStop(pos.stopLoss || 0);
     setEditTarget1(pos.target1 || 0);
@@ -159,6 +161,7 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
             id: editingPos.id,
             name: editName,
             entryPrice: editEntry,
+            currentPrice: editCurrentPrice,
             quantity: editQty,
             stopLoss: editStop,
             target1: editTarget1,
@@ -636,6 +639,21 @@ export function PortfolioTab({ portfolioSummary, onRefresh, onOpenChart }: Portf
                   value={editName} 
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
+                />
+              </div>
+
+              {/* Cotação Atual no Home Broker da Corretora */}
+              <div className="p-3 bg-cyan-950/40 border border-cyan-500/40 rounded-xl space-y-1">
+                <label className="text-cyan-300 font-bold text-xs flex items-center justify-between">
+                  <span>⚡ Cotação Atual na Corretora / Home Broker (R$):</span>
+                  <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">Preço real de tela</span>
+                </label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={editCurrentPrice} 
+                  onChange={(e) => setEditCurrentPrice(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-cyan-500/50 rounded-lg px-3 py-2 text-cyan-300 font-mono font-bold text-sm focus:outline-none focus:border-cyan-400"
                 />
               </div>
 

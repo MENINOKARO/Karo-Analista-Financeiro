@@ -17,12 +17,20 @@ export async function GET(req: NextRequest) {
       await Promise.all(
         positions.map(async (pos) => {
           try {
+            const clean = pos.ticker.replace(/\.SA$/, '');
+            const isOpt = pos.modality === 'OPTIONS' || /^[A-Z]{4}[A-X]\d+$/.test(clean);
+            
+            // Para opções B3, preserva a cotação exata informada pelo usuário no Home Broker da corretora
+            if (isOpt && pos.currentPrice > 0) {
+              return;
+            }
+
             const quote = await MarketFeedService.getLiveQuote(pos.ticker);
             if (quote && quote.price > 0) {
               quotesMap[pos.ticker] = quote.price;
-              quotesMap[pos.ticker.replace(/\.SA$/, '')] = quote.price;
+              quotesMap[clean] = quote.price;
             } else {
-              // Fallback com candles
+              // Fallback com candles para ações diretas
               const symbol = pos.ticker.includes('.') ? pos.ticker : `${pos.ticker}.SA`;
               const candles = await MarketFeedService.getCandles(symbol, '15m', 5);
               if (candles && candles.length > 0) {
@@ -58,31 +66,28 @@ export async function POST(req: NextRequest) {
       const { 
         signal, 
         quantity = 100, 
-        customEntry,
+        entryPrice = signal?.swingTrade?.entryPrice || signal?.currentPrice,
         modality = 'SWING',
         optionTicker,
-        optionStrike,
-        optionType,
-        strategyTitle,
-        stopLoss,
-        target1,
-        target2
+        optionStrike
       } = payload;
 
-      const isOption = modality === 'OPTIONS';
-      const finalTicker = isOption ? (optionTicker || signal.ticker) : (signal.standardLotTicker || signal.ticker);
-      const finalName = isOption ? `${signal.name} (${strategyTitle || 'Opção B3'})` : signal.name;
-      const entryPrice = customEntry || signal.currentPrice;
+      if (!signal) {
+        return NextResponse.json({ success: false, message: 'Dados do sinal inválidos.' }, { status: 400 });
+      }
+
       const totalInvested = Number((quantity * entryPrice).toFixed(2));
-      const market = signal.market || (signal.ticker.endsWith('.SA') ? 'B3' : 'CRYPTO');
+      const stop = signal.swingTrade?.stopLoss || Number((entryPrice * 0.97).toFixed(2));
+      const t1 = signal.swingTrade?.target1 || Number((entryPrice * 1.05).toFixed(2));
+      const t2 = signal.swingTrade?.target2 || Number((entryPrice * 1.10).toFixed(2));
 
       const newPos: StoredTradePosition = {
         id: `pos-${Date.now()}`,
         userId,
-        ticker: finalTicker,
-        name: finalName,
-        market,
-        direction: signal.action === 'BUY' ? 'BUY' : 'SELL',
+        ticker: optionTicker || signal.ticker,
+        name: optionTicker ? `${signal.name} (Opção ${optionTicker})` : signal.name,
+        market: signal.market || 'B3',
+        direction: signal.action || 'BUY',
         entryPrice,
         currentPrice: entryPrice,
         quantity,
@@ -90,73 +95,81 @@ export async function POST(req: NextRequest) {
         currentValue: totalInvested,
         pnlAmount: 0.00,
         pnlPercent: 0.00,
-        stopLoss: isOption ? 0.00 : (stopLoss || signal.stopLoss),
-        target1: target1 || signal.target1,
-        target2: target2 || signal.target2,
+        stopLoss: stop,
+        target1: t1,
+        target2: t2,
         openedAt: new Date().toISOString(),
         status: 'ABERTA',
-        robotAdvice: isOption
-          ? `💎 Contrato de Opção ${finalTicker} registrado a R$ ${entryPrice.toFixed(2)} (${quantity} un = R$ ${totalInvested.toFixed(2)}). O robô monitora a aceleração até o Alvo 1.`
-          : `🚀 Operação em ${finalTicker} iniciada a R$ ${entryPrice.toFixed(2)}! Stop inicial em R$ ${(stopLoss || signal.stopLoss).toFixed(2)}.`,
-        originSetup: strategyTitle || signal.setupTitle,
-        modality,
+        robotAdvice: `🚀 Posição aberta em ${optionTicker || signal.ticker}. Stop Loss de proteção em R$ ${stop.toFixed(2)} e Alvo 1 em R$ ${t1.toFixed(2)}.`,
+        originSetup: signal.setupTitle,
+        modality: modality || (optionTicker ? 'OPTIONS' : 'SWING'),
         optionTicker,
-        optionStrike,
-        optionType
+        optionStrike
       };
 
       KaroDatabase.addPosition(userId, newPos);
 
       return NextResponse.json({ 
         success: true, 
-        message: `Operação em ${finalTicker} registrada com sucesso na sua carteira!`,
+        message: `Posição em ${newPos.ticker} adicionada à sua carteira!`,
         data: newPos 
       });
     }
 
-    // 2. ADICIONAR POSIÇÃO MANUALMENTE
+    // 2. CADASTRO MANUAL DE ATIVO / OPÇÃO
     if (action === 'ADD_MANUAL') {
-      const { ticker, name, market, entryPrice, quantity, stopLoss, target1, target2 } = payload;
-      const totalInvested = Number((quantity * entryPrice).toFixed(2));
+      const { ticker, name, market, entryPrice, currentPrice, quantity, stopLoss, target1, target2 } = payload;
+      const cleanTicker = ticker.trim().toUpperCase();
+      const isOption = /^[A-Z]{4}[A-X]\d+$/.test(cleanTicker);
+      const effectiveEntry = Number(entryPrice);
+      const effectiveCurrent = currentPrice !== undefined && Number(currentPrice) > 0 ? Number(currentPrice) : effectiveEntry;
+      const effectiveQty = Number(quantity);
+      const totalInvested = Number((effectiveQty * effectiveEntry).toFixed(2));
+      const currentValue = Number((effectiveQty * effectiveCurrent).toFixed(2));
+      const pnlAmount = Number((currentValue - totalInvested).toFixed(2));
+      const pnlPercent = totalInvested > 0 ? Number(((pnlAmount / totalInvested) * 100).toFixed(2)) : 0;
 
       const newPos: StoredTradePosition = {
-        id: `pos-man-${Date.now()}`,
+        id: `pos-${Date.now()}`,
         userId,
-        ticker,
-        name: name || ticker,
+        ticker: cleanTicker,
+        name: name || cleanTicker,
         market: market || 'B3',
         direction: 'BUY',
-        entryPrice,
-        currentPrice: entryPrice,
-        quantity,
+        entryPrice: effectiveEntry,
+        currentPrice: effectiveCurrent,
+        quantity: effectiveQty,
         totalInvested,
-        currentValue: totalInvested,
-        pnlAmount: 0.00,
-        pnlPercent: 0.00,
-        stopLoss: stopLoss || 0,
-        target1: target1 || Number((entryPrice * 1.05).toFixed(2)),
-        target2: target2 || Number((entryPrice * 1.10).toFixed(2)),
+        currentValue,
+        pnlAmount,
+        pnlPercent,
+        stopLoss: Number(stopLoss) || 0,
+        target1: Number(target1) || Number((effectiveEntry * 1.05).toFixed(2)),
+        target2: Number(target2) || Number((effectiveEntry * 1.10).toFixed(2)),
         openedAt: new Date().toISOString(),
         status: 'ABERTA',
-        robotAdvice: `Posição manual em ${ticker} adicionada à sua carteira.`,
-        originSetup: 'Entrada Manual',
-        modality: 'SWING'
+        robotAdvice: isOption 
+          ? `Opção ${cleanTicker} registrada com cotação de R$ ${effectiveCurrent.toFixed(2)}. Monitorando alvos e zonas de stop.`
+          : `Posição manual em ${cleanTicker} adicionada à sua carteira.`,
+        originSetup: isOption ? 'Opção Manual' : 'Entrada Manual',
+        modality: isOption ? 'OPTIONS' : 'SWING'
       };
 
       KaroDatabase.addPosition(userId, newPos);
 
       return NextResponse.json({ 
         success: true, 
-        message: `Posição em ${ticker} adicionada à sua carteira!`,
+        message: `Posição em ${cleanTicker} adicionada à sua carteira!`,
         data: newPos 
       });
     }
 
     // 3. EDITAR POSIÇÃO EXISTENTE
     if (action === 'UPDATE_POSITION') {
-      const { id, entryPrice, quantity, stopLoss, target1, target2, status, name } = payload;
+      const { id, entryPrice, currentPrice, quantity, stopLoss, target1, target2, status, name } = payload;
       const updated = KaroDatabase.updatePosition(userId, id, {
         entryPrice,
+        currentPrice,
         quantity,
         stopLoss,
         target1,

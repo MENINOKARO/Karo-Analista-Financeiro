@@ -334,6 +334,7 @@ export class KaroDatabase {
     const pos = db.portfolios[userId].find(p => p.id === positionId);
     if (!pos) return null;
 
+    if (updates.currentPrice !== undefined && Number(updates.currentPrice) >= 0) pos.currentPrice = Number(updates.currentPrice);
     if (updates.entryPrice !== undefined) pos.entryPrice = Number(updates.entryPrice);
     if (updates.quantity !== undefined) pos.quantity = Number(updates.quantity);
     if (updates.stopLoss !== undefined) pos.stopLoss = Number(updates.stopLoss);
@@ -345,7 +346,7 @@ export class KaroDatabase {
 
     // Recalcula totais
     pos.totalInvested = Number((pos.quantity * pos.entryPrice).toFixed(2));
-    const currentP = pos.currentPrice || pos.entryPrice;
+    const currentP = pos.currentPrice !== undefined ? pos.currentPrice : pos.entryPrice;
     pos.currentValue = Number((pos.quantity * currentP).toFixed(2));
     pos.pnlAmount = Number((pos.currentValue - pos.totalInvested).toFixed(2));
     pos.pnlPercent = pos.totalInvested > 0 ? Number(((pos.pnlAmount / pos.totalInvested) * 100).toFixed(2)) : 0;

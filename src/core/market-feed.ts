@@ -294,11 +294,67 @@ export class MarketFeedService {
     return candles;
   }
 
+  public static async getTradingViewQuotes(rawTickers: string[]): Promise<Record<string, TradingViewQuote>> {
+    const result: Record<string, TradingViewQuote> = {};
+    if (!rawTickers || rawTickers.length === 0) return result;
+
+    try {
+      const tvTickers = rawTickers.map(t => {
+        const clean = t.replace('.SA', '').toUpperCase();
+        return clean.includes('BTC') || clean.includes('ETH') || clean.includes('SOL')
+          ? `BINANCE:${clean}USDT`
+          : `BMFBOVESPA:${clean}`;
+      });
+
+      const res = await axios.post(
+        'https://scanner.tradingview.com/brazil/scan',
+        {
+          symbols: { tickers: tvTickers },
+          columns: ['close', 'change', 'volume', 'RSI', 'MACD.macd', 'MACD.signal', 'Recommend.All', 'description']
+        },
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*'
+          },
+          timeout: 4500
+        }
+      );
+
+      const items = res.data?.data || [];
+      for (const item of items) {
+        if (!item || !item.s || !item.d) continue;
+        const symbolParts = item.s.split(':');
+        const ticker = symbolParts[1]?.replace('USDT', '') || item.s;
+        const d = item.d;
+        
+        if (d[0] !== null && d[0] !== undefined) {
+          result[ticker] = {
+            ticker,
+            price: Number(Number(d[0]).toFixed(2)),
+            changePercent: Number(Number(d[1] || 0).toFixed(2)),
+            volume: Number(d[2] || 0),
+            rsi: Number(Number(d[3] || 50).toFixed(1)),
+            macd: Number(Number(d[4] || 0).toFixed(3)),
+            macdSignal: Number(Number(d[5] || 0).toFixed(3)),
+            recommendation: Number(Number(d[6] || 0).toFixed(2)),
+            description: String(d[7] || ticker)
+          };
+          result[`${ticker}.SA`] = result[ticker];
+        }
+      }
+    } catch (e) {
+      // Fallback silencioso
+    }
+
+    return result;
+  }
+
   public static async getLiveQuote(symbol: string): Promise<{ price: number; changePercent: number; name: string } | null> {
     const clean = symbol.trim().toUpperCase().replace(/\.SA$/, '');
     const info = resolveTickerInfo(symbol);
 
-    // 1. Para opções B3, consulta prioritariamente a base calibrada da B3 (B3OptionsDatabase), idêntica ao Radar
+    // 1. Para opções B3, consulta prioritariamente a base calibrada da B3 (B3OptionsDatabase), idêntica ao Radar & Opções.net.br
     if (info.isOption) {
       try {
         const root = clean.slice(0, 4);
@@ -317,8 +373,22 @@ export class MarketFeedService {
       } catch (e) {}
     }
 
+    // 2. Para Ações e Cripto, consulta prioritariamente o Scanner Oficial TradingView B3
+    try {
+      const tvQuotes = await this.getTradingViewQuotes([clean]);
+      const tv = tvQuotes[clean] || tvQuotes[`${clean}.SA`];
+      if (tv && tv.price > 0) {
+        return {
+          price: tv.price,
+          changePercent: tv.changePercent,
+          name: info.name
+        };
+      }
+    } catch (e) {}
+
     const targetSymbol = info.underlyingTicker || (symbol.endsWith('.SA') ? symbol : `${symbol}.SA`);
 
+    // 3. Fallback Yahoo Finance
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${targetSymbol}?interval=15m&range=1d`;
       const res = await axios.get(url, {
@@ -346,6 +416,18 @@ export class MarketFeedService {
 
     return null;
   }
+}
+
+export interface TradingViewQuote {
+  ticker: string;
+  price: number;
+  changePercent: number;
+  volume: number;
+  rsi: number;
+  macd: number;
+  macdSignal: number;
+  recommendation: number;
+  description: string;
 }
 
 export interface ResolvedTicker {

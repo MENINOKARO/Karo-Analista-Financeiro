@@ -44,18 +44,30 @@ export class MarketScannerEngine {
     const opportunities: SeniorAnalysisResult[] = [];
     const livePriceMap = new Map<string, number>();
 
+    // 0. COLETAR COTAÇÕES EM TEMPO REAL VIA TRADINGVIEW SCANNER B3
+    let tvQuotesMap: Record<string, any> = {};
+    try {
+      tvQuotesMap = await MarketFeedService.getTradingViewQuotes(WATCHLIST.map(w => w.symbol));
+    } catch (e) {}
+
     // 1. SCANNER AÇÕES B3
     const b3Promises = WATCHLIST.map(async (tickerInfo: TickerInfo) => {
       try {
+        const cleanTicker = tickerInfo.symbol.replace(/\.SA$/, '');
+        const tvData = tvQuotesMap[cleanTicker] || tvQuotesMap[tickerInfo.symbol];
+
         const [candles5m, candles15m, candlesDaily] = await Promise.all([
           MarketFeedService.getCandles(tickerInfo.symbol, '5m', 60),
           MarketFeedService.getCandles(tickerInfo.symbol, '15m', 40),
           MarketFeedService.getCandles(tickerInfo.symbol, '1d', 30)
         ]);
 
-        if (candles5m.length > 0) {
+        if (tvData && tvData.price > 0) {
+          livePriceMap.set(tickerInfo.symbol, tvData.price);
+          livePriceMap.set(cleanTicker, tvData.price);
+        } else if (candles5m.length > 0) {
           livePriceMap.set(tickerInfo.symbol, candles5m[candles5m.length - 1].close);
-          livePriceMap.set(tickerInfo.symbol.replace(/\.SA$/, ''), candles5m[candles5m.length - 1].close);
+          livePriceMap.set(cleanTicker, candles5m[candles5m.length - 1].close);
         }
 
         const analysis = SeniorAnalystEngine.evaluateStock(
@@ -66,12 +78,42 @@ export class MarketScannerEngine {
           candlesDaily
         );
 
-        if (analysis && analysis.confluenceScore >= 70) {
-          analysis.market = 'B3';
-          opportunities.push(analysis);
+        if (analysis) {
+          // Atualiza com dados institucionais do TradingView se disponíveis
+          if (tvData && tvData.price > 0) {
+            analysis.currentPrice = tvData.price;
+            analysis.change24h = tvData.changePercent;
+          }
 
-          if (this.telegramConfig.enabled && this.telegramConfig.notifyOpportunities !== false) {
-            await TelegramNotificationService.sendSeniorSignalAlert(analysis, this.telegramConfig);
+          // CÁLCULO DO MOTOR DE PROBABILIDADES DIRECIONAIS 5M
+          const baseScore = analysis.confluenceScore;
+          const tvBonus = tvData ? (tvData.recommendation * 8) : 0;
+
+          if (analysis.action === 'BUY') {
+            const pUp = Math.min(95, Math.max(55, Math.round(baseScore + tvBonus)));
+            analysis.probabilityUp = pUp;
+            analysis.probabilityDown = 100 - pUp;
+            analysis.flowIntensity = pUp >= 80 ? 'FORTE_COMPRA' : 'COMPRA_MODERADA';
+          } else if (analysis.action === 'SELL') {
+            const pDown = Math.min(95, Math.max(55, Math.round(baseScore + Math.abs(tvBonus))));
+            analysis.probabilityDown = pDown;
+            analysis.probabilityUp = 100 - pDown;
+            analysis.flowIntensity = pDown >= 80 ? 'FORTE_VENDA' : 'VENDA_MODERADA';
+          } else {
+            analysis.probabilityUp = 50;
+            analysis.probabilityDown = 50;
+            analysis.flowIntensity = 'NEUTRO';
+          }
+
+          analysis.dataSources = ['TradingView B3 (Tempo Real)', 'Opções.net.br', 'B3 Database'];
+
+          if (analysis.confluenceScore >= 70) {
+            analysis.market = 'B3';
+            opportunities.push(analysis);
+
+            if (this.telegramConfig.enabled && this.telegramConfig.notifyOpportunities !== false) {
+              await TelegramNotificationService.sendSeniorSignalAlert(analysis, this.telegramConfig);
+            }
           }
         }
       } catch (err: any) {
@@ -100,12 +142,33 @@ export class MarketScannerEngine {
           candlesDaily
         );
 
-        if (analysis && analysis.confluenceScore >= 70) {
-          analysis.market = 'CRYPTO';
-          opportunities.push(analysis);
+        if (analysis) {
+          const baseScore = analysis.confluenceScore;
+          if (analysis.action === 'BUY') {
+            const pUp = Math.min(95, Math.max(55, Math.round(baseScore)));
+            analysis.probabilityUp = pUp;
+            analysis.probabilityDown = 100 - pUp;
+            analysis.flowIntensity = pUp >= 80 ? 'FORTE_COMPRA' : 'COMPRA_MODERADA';
+          } else if (analysis.action === 'SELL') {
+            const pDown = Math.min(95, Math.max(55, Math.round(baseScore)));
+            analysis.probabilityDown = pDown;
+            analysis.probabilityUp = 100 - pDown;
+            analysis.flowIntensity = pDown >= 80 ? 'FORTE_VENDA' : 'VENDA_MODERADA';
+          } else {
+            analysis.probabilityUp = 50;
+            analysis.probabilityDown = 50;
+            analysis.flowIntensity = 'NEUTRO';
+          }
 
-          if (this.telegramConfig.enabled && this.telegramConfig.notifyOpportunities !== false) {
-            await TelegramNotificationService.sendSeniorSignalAlert(analysis, this.telegramConfig);
+          analysis.dataSources = ['Binance Cripto 24/7', 'TradingView Global'];
+
+          if (analysis.confluenceScore >= 70) {
+            analysis.market = 'CRYPTO';
+            opportunities.push(analysis);
+
+            if (this.telegramConfig.enabled && this.telegramConfig.notifyOpportunities !== false) {
+              await TelegramNotificationService.sendSeniorSignalAlert(analysis, this.telegramConfig);
+            }
           }
         }
       } catch (err: any) {

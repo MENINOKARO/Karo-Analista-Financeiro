@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldAlert, RefreshCw, AlertTriangle, Filter, Coins } from 'lucide-react';
+import { ShieldAlert, RefreshCw, AlertTriangle, Filter, Coins, TrendingUp, TrendingDown, Flame, ChevronRight } from 'lucide-react';
 import { SeniorAnalysisResult } from '@/core/types';
 import { OpportunityCard } from './OpportunityCard';
 
@@ -61,6 +61,16 @@ export function RadarTab({
     return true;
   });
 
+  const topBuyOps = displayedOps
+    .filter(o => o.action === 'BUY')
+    .sort((a, b) => (b.probabilityUp || b.confluenceScore) - (a.probabilityUp || a.confluenceScore))
+    .slice(0, 3);
+
+  const topSellOps = displayedOps
+    .filter(o => o.action === 'SELL')
+    .sort((a, b) => (b.probabilityDown || b.confluenceScore) - (a.probabilityDown || a.confluenceScore))
+    .slice(0, 3);
+
   return (
     <div className="space-y-6">
       {/* PIPELINE INSTITUCIONAL: COLETA -> AVALIAÇÃO DE CICLOS DIÁRIOS -> SUGESTÕES */}
@@ -90,12 +100,12 @@ export function RadarTab({
         {/* 4 ETAPAS DO PROCESSO */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
           <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-            <span className="text-[10px] text-cyan-400 font-bold uppercase block mb-1">1. Ingestão de Dados</span>
-            <p className="text-slate-300 font-semibold leading-tight">Coleta de Candles B3 (1d, 60m, 15m, 5m) e Book de Opções</p>
+            <span className="text-[10px] text-cyan-400 font-bold uppercase block mb-1">1. Ingestão Multi-Fontes</span>
+            <p className="text-slate-300 font-semibold leading-tight">TradingView B3 (Tempo Real) + Opções.net.br + Yahoo Feed</p>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-            <span className="text-[10px] text-purple-400 font-bold uppercase block mb-1">2. Ciclos Diários</span>
+            <span className="text-[10px] text-purple-400 font-bold uppercase block mb-1">2. Ciclos & Probabilidades</span>
             <p className="text-slate-300 font-semibold leading-tight">Mapeamento de Suportes de Fundo, Acumulação Wyckoff e SEPA</p>
           </div>
 
@@ -107,6 +117,131 @@ export function RadarTab({
           <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
             <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">4. Sugestão Pronta</span>
             <p className="text-emerald-200 font-bold leading-tight">Ações à Vista + Opções OTM Calibradas com Stop & Alvos</p>
+          </div>
+        </div>
+      </div>
+
+      {/* PAINEL TOP OPORTUNIDADES QUENTES DO MOMENTO (RANKING 5M) */}
+      <div className="bg-[#0c1220] border border-cyan-500/40 rounded-2xl p-5 shadow-2xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Flame className="w-5 h-5 text-amber-400 animate-pulse" />
+            <div>
+              <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                Ranking das Melhores Oportunidades em 5m
+                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                  ⚡ TradingView B3 + Opções.net.br
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Ações com maior confluência probabilística de subida (CALL) ou correção (PUT) detectadas no scanner.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1 rounded-lg">
+            🟢 {displayedOps.length} Ativos Analisados
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* TOP 3 ALTA (COMPRA / CALL) */}
+          <div className="bg-slate-900/90 border border-emerald-500/30 rounded-xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-emerald-400 pb-1.5 border-b border-emerald-500/20">
+              <span className="flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4" /> 🚀 TOP OPORTUNIDADES DE ALTA (CALL / COMPRA)
+              </span>
+              <span className="text-[10px] text-slate-400">Probabilidade 5m</span>
+            </div>
+            {topBuyOps.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2 text-center">Nenhuma oportunidade de alta no momento.</p>
+            ) : (
+              topBuyOps.map((op, idx) => (
+                <div 
+                  key={op.ticker}
+                  className="bg-slate-950/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 rounded-xl p-2.5 transition flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold flex items-center justify-center font-mono">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white text-xs font-mono">{op.standardLotTicker || op.ticker.replace('.SA', '')}</span>
+                        <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{op.name}</span>
+                      </div>
+                      <span className="text-[10px] text-cyan-300 font-mono">
+                        R$ {op.currentPrice.toFixed(2)} • Opção: {op.optionsTrade.suggestedTicker}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right flex items-center gap-2">
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-bold text-emerald-400 block">
+                        🟢 {op.probabilityUp || op.confluenceScore}%
+                      </span>
+                      <span className="text-[9px] text-slate-400">Score {op.confluenceScore}%</span>
+                    </div>
+                    <button
+                      onClick={() => handleSearchTicker(op.standardLotTicker || op.ticker.replace('.SA', ''))}
+                      className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition"
+                      title="Ver detalhes"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* TOP 3 BAIXA (VENDA / PUT) */}
+          <div className="bg-slate-900/90 border border-rose-500/30 rounded-xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-rose-400 pb-1.5 border-b border-rose-500/20">
+              <span className="flex items-center gap-1.5">
+                <TrendingDown className="w-4 h-4" /> 🔻 TOP OPORTUNIDADES DE CORREÇÃO (PUT / VENDA)
+              </span>
+              <span className="text-[10px] text-slate-400">Probabilidade 5m</span>
+            </div>
+            {topSellOps.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2 text-center">Nenhuma oportunidade de correção relevante.</p>
+            ) : (
+              topSellOps.map((op, idx) => (
+                <div 
+                  key={op.ticker}
+                  className="bg-slate-950/60 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/40 rounded-xl p-2.5 transition flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-bold flex items-center justify-center font-mono">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white text-xs font-mono">{op.standardLotTicker || op.ticker.replace('.SA', '')}</span>
+                        <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{op.name}</span>
+                      </div>
+                      <span className="text-[10px] text-rose-300 font-mono">
+                        R$ {op.currentPrice.toFixed(2)} • Opção: {op.optionsTrade.suggestedTicker}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right flex items-center gap-2">
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-bold text-rose-400 block">
+                        🔴 {op.probabilityDown || op.confluenceScore}%
+                      </span>
+                      <span className="text-[9px] text-slate-400">Score {op.confluenceScore}%</span>
+                    </div>
+                    <button
+                      onClick={() => handleSearchTicker(op.standardLotTicker || op.ticker.replace('.SA', ''))}
+                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
+                      title="Ver detalhes"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

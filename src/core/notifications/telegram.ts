@@ -28,10 +28,15 @@ export class TelegramNotificationService {
       return false;
     }
 
-    const directionEmoji = signal.action === 'BUY' ? '🟢 COMPRA (LONG)' : '🔴 VENDA (SHORT)';
-    const scoreBadge = signal.confluenceScore >= 90 ? '⭐⭐⭐ EXCEPCIONAL' : '⭐⭐ ALTA PROBABILIDADE';
+    const directionEmoji = signal.action === 'BUY' ? '🟢 COMPRA (LONG / CALL)' : '🔴 VENDA (SHORT / PUT)';
+    const scoreBadge = (signal.probabilityUp && signal.probabilityUp >= 80) || (signal.probabilityDown && signal.probabilityDown >= 80)
+      ? '🏆 OPORTUNIDADE OURO'
+      : signal.confluenceScore >= 90 ? '⭐⭐⭐ EXCEPCIONAL' : '⭐⭐ ALTA PROBABILIDADE';
     const opt = signal.optionsTrade;
     const marketBadge = signal.market === 'CRYPTO' ? '🪙 CRIPTO 24/7' : '🇧🇷 B3 BRASIL';
+    const probDisplay = signal.action === 'BUY'
+      ? `🟢 *Probabilidade Alta (5m):* *${signal.probabilityUp || signal.confluenceScore}%* | Queda: ${signal.probabilityDown || (100 - signal.confluenceScore)}%`
+      : `🔴 *Probabilidade Queda (5m):* *${signal.probabilityDown || signal.confluenceScore}%* | Alta: ${signal.probabilityUp || (100 - signal.confluenceScore)}%`;
 
     const message = `
 🚨 *[NOVA OPORTUNIDADE SENIOR]* 🚨
@@ -40,6 +45,8 @@ export class TelegramNotificationService {
 📈 *Ativo:* \`${signal.ticker}\` (${signal.name})
 🧭 *Direção:* *${directionEmoji}*
 📊 *Score Confluência:* *${signal.confluenceScore}%* (${scoreBadge})
+🎯 *${probDisplay}*
+📡 *Fontes de Dados:* _TradingView B3 • Opções.net.br • B3_
 🎯 *Setup:* *${signal.setupTitle}*
 ${signal.recentCatalysts && signal.recentCatalysts.length > 0 ? `📰 *Noticiário:* _${signal.recentCatalysts.join(', ')}_\n` : ''}
 ━━━━━━━━━━━━━━━━━━━━

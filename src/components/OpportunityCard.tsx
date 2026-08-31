@@ -210,6 +210,40 @@ export function OpportunityCard({ op, onOpenChart, onOpenCalculator, onFollowSig
           </div>
         )}
 
+        {/* BARRA DE PROBABILIDADE DIRECIONAL 5M & FONTES MULTI-MERCADO */}
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-2.5 mb-3 space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <div className="flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-400">Prob. Alta: {op.probabilityUp || op.confluenceScore}%</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-rose-400">Prob. Queda: {op.probabilityDown || (100 - op.confluenceScore)}%</span>
+              <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+            </div>
+          </div>
+          {/* Barra Visual Proporcional */}
+          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
+            <div 
+              style={{ width: `${op.probabilityUp || op.confluenceScore}%` }} 
+              className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-500"
+            />
+            <div 
+              style={{ width: `${op.probabilityDown || (100 - op.confluenceScore)}%` }} 
+              className="bg-gradient-to-r from-rose-500 to-amber-500 h-full transition-all duration-500"
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+              Fontes: {op.dataSources?.join(' • ') || 'TradingView B3 • Opções.net.br'}
+            </span>
+            <span className="font-mono font-semibold text-cyan-300">
+              Fluxo: {op.flowIntensity === 'FORTE_COMPRA' ? '🔥 Forte Comprador' : op.flowIntensity === 'FORTE_VENDA' ? '⚡ Forte Vendedor' : '🟢 Comprador'}
+            </span>
+          </div>
+        </div>
+
         {/* SELETOR DE QUANTIDADE / LOTE SIMULADO */}
         <div className="bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl mb-3 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 font-semibold text-slate-300">

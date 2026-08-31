@@ -312,6 +312,10 @@ export interface SeniorAnalysisResult {
   
   action: ActionDirection;
   confluenceScore: number;
+  probabilityUp?: number; // % Probabilidade de Alta (0 a 100)
+  probabilityDown?: number; // % Probabilidade de Queda (0 a 100)
+  flowIntensity?: 'FORTE_COMPRA' | 'COMPRA_MODERADA' | 'NEUTRO' | 'VENDA_MODERADA' | 'FORTE_VENDA';
+  dataSources?: string[]; // Ex: ['TradingView B3', 'Opções.net.br', 'B3 Database']
   setupTitle: string;
   seniorThesis: string;
   institutionalScenarios?: InstitutionalScenarioAnalysis; // Análise Multicenários Institucional
